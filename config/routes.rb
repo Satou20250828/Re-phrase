@@ -1,5 +1,7 @@
 Rails.application.routes.draw do
   root "pages#home"
+  get "terms", to: "pages#terms", as: :terms
+  get "privacy", to: "pages#privacy", as: :privacy
 
   # 言い換え機能の最小構成（一覧表示 + 作成）
   resources :rephrases, only: %i[index create]

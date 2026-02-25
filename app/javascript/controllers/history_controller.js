@@ -199,9 +199,34 @@ export default class extends Controller {
     button.type = "button"
     button.className = "p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
     button.dataset.action = "click->history#deleteItem"
-    const icon = document.createElement("span")
-    icon.className = "material-icons text-sm"
-    icon.textContent = "delete"
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    icon.setAttribute("class", "h-4 w-4")
+    icon.setAttribute("viewBox", "0 0 24 24")
+    icon.setAttribute("fill", "none")
+    icon.setAttribute("aria-hidden", "true")
+
+    const pathTop = document.createElementNS("http://www.w3.org/2000/svg", "path")
+    pathTop.setAttribute("d", "M4 7h16")
+    pathTop.setAttribute("stroke", "currentColor")
+    pathTop.setAttribute("stroke-width", "1.8")
+    pathTop.setAttribute("stroke-linecap", "round")
+
+    const pathHandle = document.createElementNS("http://www.w3.org/2000/svg", "path")
+    pathHandle.setAttribute("d", "M9 7V5h6v2")
+    pathHandle.setAttribute("stroke", "currentColor")
+    pathHandle.setAttribute("stroke-width", "1.8")
+    pathHandle.setAttribute("stroke-linecap", "round")
+    pathHandle.setAttribute("stroke-linejoin", "round")
+
+    const pathBody = document.createElementNS("http://www.w3.org/2000/svg", "path")
+    pathBody.setAttribute("d", "M7 7l1 12h8l1-12")
+    pathBody.setAttribute("stroke", "currentColor")
+    pathBody.setAttribute("stroke-width", "1.8")
+    pathBody.setAttribute("stroke-linejoin", "round")
+
+    icon.appendChild(pathTop)
+    icon.appendChild(pathHandle)
+    icon.appendChild(pathBody)
     button.appendChild(icon)
     actions.appendChild(button)
 

@@ -53,17 +53,26 @@ class PhraseConverterService
     matched = matched_rephrase
     return fallback_result unless matched
 
-    conversion_text = extract_conversion_text(matched.content)
-    hit_type = matched.content.to_s.strip == @query ? :exact : :partial
-
     {
-      result_text: conversion_text.presence || @query,
+      result_text: matched_conversion_text(matched),
       safety_mode_applied: false,
-      hit_type: hit_type,
-      metadata: {
-        category_id: @category_id,
-        temperature: random_temperature
-      }
+      hit_type: matched_hit_type(matched),
+      metadata: result_metadata
+    }
+  end
+
+  def matched_conversion_text(matched)
+    extract_conversion_text(matched.content).presence || @query
+  end
+
+  def matched_hit_type(matched)
+    matched.content.to_s.strip == @query ? :exact : :partial
+  end
+
+  def result_metadata
+    {
+      category_id: @category_id,
+      temperature: random_temperature
     }
   end
 
@@ -84,7 +93,13 @@ class PhraseConverterService
   end
 
   def openai_available?
+    return false if mock_conversion_enabled?
+
     defined?(OpenAI::Client) && ENV["OPENAI_API_KEY"].present?
+  end
+
+  def mock_conversion_enabled?
+    ActiveModel::Type::Boolean.new.cast(ENV.fetch("REPHRASE_USE_MOCK", true))
   end
 
   def random_temperature
@@ -168,9 +183,21 @@ class PhraseConverterService
     category_rephrases = Rephrase.where(category_id: @category_id)
     return nil if category_rephrases.empty?
 
-    category_rephrases.find { |r| r.content.to_s.strip == @query } ||
-      category_rephrases.find { |r| extract_source_text(r.content) == @query } ||
-      category_rephrases.find { |r| partial_match?(r.content) }
+    find_exact_match(category_rephrases) ||
+      find_source_match(category_rephrases) ||
+      find_partial_match(category_rephrases)
+  end
+
+  def find_exact_match(category_rephrases)
+    category_rephrases.find { |rephrase| rephrase.content.to_s.strip == @query }
+  end
+
+  def find_source_match(category_rephrases)
+    category_rephrases.find { |rephrase| extract_source_text(rephrase.content) == @query }
+  end
+
+  def find_partial_match(category_rephrases)
+    category_rephrases.find { |rephrase| partial_match?(rephrase.content) }
   end
 
   def partial_match?(content)

@@ -1,67 +1,71 @@
-<header class="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md border-b border-primary/10 px-6 py-3 flex items-center justify-between">
-  <div class="flex items-center gap-2">
-    <div class="w-10 h-10 bg-gradient-to-br from-primary to-blue-700 rounded-lg flex items-center justify-center text-white shadow-sm">
-      <span class="material-icons">auto_awesome</span>
+<% content_for :main_class, "w-full" %>
+
+<header class="sticky top-0 z-50 w-full border-b border-primary/10 bg-white/80 px-4 py-3 backdrop-blur-md dark:bg-slate-900/80 sm:px-6">
+  <div class="mx-auto flex w-full max-w-4xl items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
+        <span class="material-symbols-outlined text-lg">auto_awesome</span>
+      </div>
+      <h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-xl">
+        Re:<span class="text-primary">フレーズ</span>
+      </h1>
     </div>
-    <h1 class="text-xl font-bold tracking-tight text-slate-900">
-      Re:<span class="text-primary">フレーズ</span>
-    </h1>
+    <div class="flex items-center gap-2">
+      <%= link_to "トップへ", root_path, class: "rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 sm:px-4 sm:text-sm" %>
+    </div>
   </div>
-  <%= link_to "トップへ", root_path, class: "px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors" %>
 </header>
 
-<main class="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+<div class="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
   <div id="form_errors">
     <%= render "rephrases/form_errors", error_message: @error_message, field_errors: @field_errors %>
   </div>
 
-  <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { controller: "rephrase" } do |form| %>
-    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-      <div class="p-1 flex justify-end bg-slate-50/50 border-b border-slate-100">
-        <button type="button" class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-500 transition-colors" data-action="rephrase#clearContent">
-          <span class="material-icons text-sm">delete_sweep</span>
+  <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { controller: "rephrase", action: "turbo:submit-end->rephrase#restoreFormState" } do |form| %>
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex justify-end border-b border-slate-100 bg-slate-50/50 p-1 dark:border-slate-800 dark:bg-slate-800/60">
+        <button type="button" class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400" data-action="rephrase#clearContent">
           内容をクリア
         </button>
       </div>
 
-      <%= form.text_area :content, rows: 6, maxlength: 300, class: "w-full p-6 border-none focus:ring-0 bg-transparent text-lg resize-none min-h-[160px] placeholder:text-slate-300", placeholder: "ここに言い換えたい文章を入力してください...", data: { rephrase_target: "content" } %>
+      <%= form.text_area :content, rows: 6, maxlength: 300, class: "min-h-[160px] w-full resize-none border-none bg-transparent p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500", placeholder: "ここに言い換えたい文章を入力してください...", data: { rephrase_target: "content" } %>
       <% if @rephrase&.errors&.any? %>
-        <ul class="text-red-500 text-sm mt-2 list-disc pl-5">
+        <ul class="mt-2 list-disc pl-5 text-sm text-red-500 dark:text-red-400">
           <% @rephrase.errors.full_messages.each do |message| %>
             <li><%= message %></li>
           <% end %>
         </ul>
       <% end %>
-      <p class="text-sm text-gray-500 mt-1">※個人情報（氏名・住所など）は入力しないでください</p>
+      <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">※個人情報（氏名・住所など）は入力しないでください</p>
     </section>
 
-    <section class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+    <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div class="flex items-center gap-2 mb-5">
-        <span class="material-icons text-primary text-xl">tune</span>
-        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">状況設定</h2>
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">状況設定</h2>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <%= form.label :scene, "シーン", class: "block text-xs font-bold text-slate-500 mb-1.5 ml-1" %>
+          <%= form.label :scene, "シーン", class: "ml-1 mb-1.5 block text-xs font-bold text-slate-500 dark:text-slate-400" %>
           <%= form.select :scene,
                           [["職場", "職場"], ["顧客対応・接客", "顧客対応・接客"], ["メール・チャット", "メール・チャット"], ["家族", "家族"], ["友人・知人", "友人・知人"], ["学校", "学校"], ["サービス利用", "サービス利用"], ["その他", "その他"]],
                           { include_blank: "選択してください" },
-                          class: "w-full bg-slate-50 border-slate-200 rounded-xl text-sm focus:ring-primary focus:border-primary" %>
+                          class: "w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-900 focus:border-primary focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" %>
         </div>
         <div>
-          <%= form.label :target, "相手の関係性", class: "block text-xs font-bold text-slate-500 mb-1.5 ml-1" %>
+          <%= form.label :target, "相手の関係性", class: "ml-1 mb-1.5 block text-xs font-bold text-slate-500 dark:text-slate-400" %>
           <%= form.select :target,
                           [["目上", "目上"], ["同僚・同じ立場", "同僚・同じ立場"], ["目下", "目下"], ["不特定（顧客など）", "不特定（顧客など）"], ["その他", "その他"]],
                           { include_blank: "選択してください" },
-                          class: "w-full bg-slate-50 border-slate-200 rounded-xl text-sm focus:ring-primary focus:border-primary" %>
+                          class: "w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-900 focus:border-primary focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" %>
         </div>
         <div>
-          <%= form.label :context, "状況", class: "block text-xs font-bold text-slate-500 mb-1.5 ml-1" %>
+          <%= form.label :context, "状況", class: "ml-1 mb-1.5 block text-xs font-bold text-slate-500 dark:text-slate-400" %>
           <%= form.select :context,
                           [["報告", "報告"], ["相談", "相談"], ["依頼", "依頼"], ["断り", "断り"], ["お詫び", "お詫び"], ["指摘", "指摘"], ["催促", "催促"], ["その他", "その他"]],
                           { include_blank: "選択してください" },
-                          class: "w-full bg-slate-50 border-slate-200 rounded-xl text-sm focus:ring-primary focus:border-primary" %>
+                          class: "w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-900 focus:border-primary focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" %>
         </div>
       </div>
     </section>
@@ -75,26 +79,25 @@
     <%= render partial: "rephrase_result", locals: { rephrased_results: @rephrased_results } %>
   <% end %>
 
-  <footer class="pt-6 pb-16">
-    <details class="group bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden" data-controller="history" open>
-      <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-100 transition-colors list-none">
+  <footer class="pb-16 pt-6">
+    <details class="group overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900" data-controller="history" open>
+      <summary class="flex cursor-pointer list-none flex-col items-start gap-2 p-4 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-3">
-          <span class="material-icons text-slate-400">history</span>
-          <span class="text-sm font-bold text-slate-600">履歴</span>
-          <span class="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full"><%= @search_logs.size %></span>
+          <span class="text-sm font-bold text-slate-600 dark:text-slate-300">履歴</span>
+          <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] text-slate-500 dark:bg-slate-700 dark:text-slate-300"><%= @search_logs.size %></span>
         </div>
         <button type="button"
-                class="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 transition-colors"
+                class="self-start px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 sm:self-auto"
                 data-action="click->history#clearAll"
                 data-clear-url="<%= clear_rephrase_history_path %>">
           履歴をすべて削除
         </button>
       </summary>
-      <div id="history_list" class="p-4 space-y-3 border-t border-slate-200 max-h-80 overflow-y-auto">
+      <div id="history_list" class="max-h-80 space-y-3 overflow-y-auto border-t border-slate-200 p-4 dark:border-slate-800">
         <% @search_logs.each do |search_log| %>
           <%= render "history_item", search_log: search_log %>
         <% end %>
       </div>
     </details>
   </footer>
-</main>
+</div>

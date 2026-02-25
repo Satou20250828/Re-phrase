@@ -2,13 +2,14 @@
 # rubocop:disable Metrics/ClassLength
 class RephrasesController < ApplicationController
   DEFAULT_CATEGORY_NAME = "default".freeze
-  MOCK_RESULT_TEXT = "【モック】お手伝いできます。状況をもう少し詳しく教えてください。".freeze
-  MOCK_VARIATIONS = [
-    "【モックA】ご連絡ありがとうございます。\n現状を確認し、対応方針を本日中に共有いたします。進捗は30分ごとに更新します。",
-    "【モックB】恐れ入りますが、次の3点をご共有ください: 1) 発生時刻 2) 再現手順 3) 期待結果。#debug #rails",
-    "【モックC】承知しました。\"至急対応\"として扱います。特殊文字テスト: !@#$%^&*()[]{}<>/\\|~`",
-    "【モックD】結論: まず暫定回避を適用し、恒久対策は別PRで実施します。改行テスト\n- 影響範囲: 限定的\n- 優先度: 高"
-  ].freeze
+  MIN_REPHRASE_CANDIDATES = 3
+  VOCAB_REPLACEMENTS = {
+    /早く/ => "至急",
+    /すぐ/ => "早急に",
+    /あとで/ => "後ほど",
+    /見て/ => "ご確認",
+    /教えて/ => "ご教示"
+  }.freeze
 
   # 直近の検索履歴を表示する初期画面
   def index
@@ -53,13 +54,10 @@ class RephrasesController < ApplicationController
   # Backward compatible endpoint for legacy request specs.
   def search
     query = params[:q].to_s
-    result = PhraseConverterService.call(query: query, category_id: params[:category_id])
-    save_search_log_compat(query: query, category_id: params[:category_id], result: result)
-
+    result = search_result(query)
     render plain: result[:result_text].to_s, status: :ok
   rescue StandardError => e
-    Rails.logger.error("[rephrase#search] エラー: #{e.class} - #{e.message}")
-    render plain: query, status: :ok
+    handle_search_error(error: e, query: query)
   end
 
   private
@@ -74,6 +72,17 @@ class RephrasesController < ApplicationController
     )
   rescue StandardError => e
     Rails.logger.warn("[rephrase#search] SearchLog保存失敗: #{e.class} - #{e.message}")
+  end
+
+  def search_result(query)
+    result = PhraseConverterService.call(query: query, category_id: params[:category_id])
+    save_search_log_compat(query: query, category_id: params[:category_id], result: result)
+    result
+  end
+
+  def handle_search_error(error:, query:)
+    Rails.logger.error("[rephrase#search] エラー: #{error.class} - #{error.message}")
+    render plain: query, status: :ok
   end
 
   # フォームから受け取る言い換え入力値
@@ -176,7 +185,9 @@ class RephrasesController < ApplicationController
                          result_preview: result[:result_text].to_s.truncate(80)
                        })
     @db_warning_message = "データベース接続に失敗したため、結果は一時表示のみです。"
-    @rephrased_results = [Rephrase.new(content: result[:result_text].to_s)]
+    @rephrased_results = split_rephrase_candidates(result[:result_text].to_s).map do |candidate|
+      Rephrase.new(content: candidate)
+    end
   end
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
@@ -283,13 +294,13 @@ class RephrasesController < ApplicationController
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
   def use_mock_conversion?
-    ActiveModel::Type::Boolean.new.cast(ENV.fetch("REPHRASE_USE_MOCK", false))
+    ActiveModel::Type::Boolean.new.cast(ENV.fetch("REPHRASE_USE_MOCK", true))
   end
 
   def mock_convert_result(content)
     text = content.to_s.strip
-    base = MOCK_VARIATIONS.sample || MOCK_RESULT_TEXT
-    rendered = text.present? ? "#{base}\n\n[入力原文] #{text}" : base
+    candidates = build_template_rephrases(text)
+    rendered = candidates.each_with_index.map { |candidate, index| "#{index + 1}. #{candidate}" }.join("\n")
 
     {
       result_text: rendered,
@@ -306,13 +317,91 @@ class RephrasesController < ApplicationController
   end
 
   def split_rephrase_candidates(text)
-    split_items = text.to_s.split(/\n?\s*\d+[.)]?\s*(?:\[[^\]]+\]\s*)?/)
-    candidates = split_items.map { |item| item.to_s.strip }.compact_blank.map do |item|
-      item.sub(/\A(?:短文|標準|フォーマル)\s*[:：]\s*/, "").strip
-    end
+    candidates = parsed_candidates(text)
+    candidates = add_template_fallbacks(candidates)
+    pad_fallback_candidates(candidates).first(MIN_REPHRASE_CANDIDATES)
+  end
 
+  def parsed_candidates(text)
+    split_items = text.to_s.split(/\n?\s*\d+[.)]?\s*(?:\[[^\]]+\]\s*)?/)
+    candidates = split_items.map { |item| normalized_candidate(item) }.compact_blank
     candidates = [text.to_s.strip] if candidates.blank?
-    candidates.first(3)
+    candidates.uniq.first(MIN_REPHRASE_CANDIDATES)
+  end
+
+  def normalized_candidate(item)
+    item.to_s.strip.sub(/\A(?:短文|標準|フォーマル)\s*[:：]\s*/, "").strip
+  end
+
+  def add_template_fallbacks(candidates)
+    return candidates if candidates.size >= MIN_REPHRASE_CANDIDATES
+
+    seed_text = candidates.first.presence || rephrase_params[:content].to_s.strip
+    fallback_rephrase_candidates(seed_text).each do |candidate|
+      break if candidates.size >= MIN_REPHRASE_CANDIDATES
+
+      candidates << candidate unless candidates.include?(candidate)
+    end
+    candidates
+  end
+
+  def pad_fallback_candidates(candidates)
+    while candidates.size < MIN_REPHRASE_CANDIDATES
+      fallback_text = fallback_candidate_text(candidates.size + 1)
+      break if fallback_text.blank?
+
+      candidates << fallback_text unless candidates.include?(fallback_text)
+    end
+    candidates
+  end
+
+  def fallback_candidate_text(suffix)
+    "#{rephrase_params[:content].to_s.strip}（提案#{suffix}）".strip.truncate(300, omission: "")
+  end
+
+  def fallback_rephrase_candidates(text)
+    build_template_rephrases(text)
+  end
+
+  def build_template_rephrases(text)
+    base = safe_rephrase_base(text)
+    return default_template_rephrases if base.blank?
+
+    [
+      "#{base}の件ですが、何卒よろしくお願い申し上げます。",
+      "#{base}につきまして、ご確認をお願いできますでしょうか？",
+      "#{base}の件ですが、よろしくね！"
+    ].map { |item| item.truncate(300, omission: "") }
+  end
+
+  # 安全性重視の加工:
+  # - 未知パターンは触らず、限定語尾のみ取り除く
+  # - 空/短文はフォールバックへ
+  def safe_rephrase_base(text)
+    sanitized = text.to_s.strip.gsub(/\s+/, " ")
+    return nil if sanitized.blank? || sanitized.length < 2
+
+    sanitized = apply_vocab_replacements(sanitized)
+    sanitized = sanitized.sub(/(?:やって|して|だよ|だ)\z/, "").strip
+    return nil if sanitized.blank? || sanitized.length < 2
+
+    sanitized.gsub(/[、。]+\z/, "").strip
+  end
+
+  def apply_vocab_replacements(text)
+    replaced = text.to_s.dup
+    VOCAB_REPLACEMENTS.each do |pattern, replacement|
+      replaced = replaced.gsub(pattern, replacement)
+    end
+    replaced
+  end
+
+  def default_template_rephrases
+    [
+      "ご依頼の件ですが、何卒よろしくお願い申し上げます。",
+      "ご依頼につきまして、ご確認をお願いできますでしょうか？",
+      "ご依頼の件ですが、よろしくね！"
+    ]
   end
 
   # rubocop:disable Metrics/MethodLength
