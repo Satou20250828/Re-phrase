@@ -1,5 +1,7 @@
 <%= turbo_stream.replace "rephrase_result" do %>
-  <%= render partial: "rephrases/rephrase_result", locals: { rephrased_results: @rephrased_results } %>
+  <%= turbo_frame_tag "rephrase_result", data: { rephrase_target: "resultFrame" } do %>
+    <%= render partial: "rephrases/rephrase_result", locals: { rephrased_results: @rephrased_results } %>
+  <% end %>
 <% end %>
 
 <%= turbo_stream.update "error_modal_container" do %>

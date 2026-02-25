@@ -30,13 +30,13 @@
 
 <% if has_error_message || has_field_errors %>
   <div id="rephrase-error-modal"
-       class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
+       class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4"
        role="alertdialog"
        aria-modal="true"
        aria-labelledby="rephrase-error-modal-title"
        aria-describedby="rephrase-error-modal-description"
-       data-action="click->rephrase#closeErrorModalOnBackdrop">
-    <section class="w-full max-w-xl rounded-2xl border border-[var(--color-error)]/40 bg-white p-6 shadow-2xl dark:border-red-900/60 dark:bg-slate-900"
+       >
+    <section class="pointer-events-auto w-full max-w-xl rounded-2xl border border-[var(--color-error)]/40 bg-white p-6 shadow-2xl dark:border-red-900/60 dark:bg-slate-900"
              data-modal-panel="true">
       <div class="flex items-start gap-3">
         <span class="material-symbols-outlined mt-0.5 text-2xl text-[var(--color-error)] dark:text-red-300">error</span>
