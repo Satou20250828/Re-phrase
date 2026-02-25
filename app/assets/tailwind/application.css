@@ -9,6 +9,7 @@
 
 :root {
   color-scheme: light;
+  --color-error: #dc2626;
 }
 
 :root.dark {

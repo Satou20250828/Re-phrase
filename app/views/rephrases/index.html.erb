@@ -17,27 +17,38 @@
 </header>
 
 <div class="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+  <%
+    content_error_messages = []
+    content_error_messages.concat(Array(@field_errors&.dig(:content)))
+    content_error_messages.concat(Array(@field_errors&.dig("content")))
+    content_error_messages.concat(Array(@rephrase&.errors&.[](:content)))
+    has_content_error = content_error_messages.compact.any?(&:present?)
+    content_section_classes = if has_content_error
+      "overflow-hidden rounded-2xl border border-[var(--color-error)] bg-red-50/20 shadow-sm transition-all focus-within:ring-2 focus-within:ring-[var(--color-error)]/20 dark:border-red-900 dark:bg-red-950/20"
+    else
+      "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-800 dark:bg-slate-900"
+    end
+  %>
   <div id="form_errors">
     <%= render "rephrases/form_errors", error_message: @error_message, field_errors: @field_errors %>
   </div>
 
   <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { controller: "rephrase", action: "turbo:submit-end->rephrase#restoreFormState" } do |form| %>
-    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-800 dark:bg-slate-900">
+    <section class="<%= content_section_classes %>">
       <div class="flex justify-end border-b border-slate-100 bg-slate-50/50 p-1 dark:border-slate-800 dark:bg-slate-800/60">
         <button type="button" class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400" data-action="rephrase#clearContent">
           内容をクリア
         </button>
       </div>
 
-      <%= form.text_area :content, rows: 6, maxlength: 300, class: "min-h-[160px] w-full resize-none border-none bg-transparent p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500", placeholder: "ここに言い換えたい文章を入力してください...", data: { rephrase_target: "content" } %>
-      <% if @rephrase&.errors&.any? %>
-        <ul class="mt-2 list-disc pl-5 text-sm text-red-500 dark:text-red-400">
-          <% @rephrase.errors.full_messages.each do |message| %>
-            <li><%= message %></li>
-          <% end %>
-        </ul>
-      <% end %>
-      <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">※個人情報（氏名・住所など）は入力しないでください</p>
+      <%= form.text_area :content,
+                         rows: 6,
+                         maxlength: 300,
+                         class: "min-h-[160px] w-full resize-none border-none bg-transparent p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500",
+                         placeholder: "ここに言い換えたい文章を入力してください...",
+                         aria: { invalid: has_content_error, describedby: "rephrase-form-alert rephrase-input-note" },
+                         data: { rephrase_target: "content" } %>
+      <p id="rephrase-input-note" class="mt-1 text-sm text-gray-500 dark:text-slate-400">※個人情報（氏名・住所など）は入力しないでください</p>
     </section>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
