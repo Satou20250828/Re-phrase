@@ -1,6 +1,8 @@
+<% content_text = result.respond_to?(:content) ? result.content : result[:content] %>
 <%# カード全体にコントローラーを適用 %>
-<div class="group relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all overflow-hidden" 
-     data-controller="clipboard">
+<div class="group relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all overflow-hidden"
+     data-controller="clipboard"
+     data-result-content="<%= content_text %>">
   
   <div class="p-5 sm:p-6">
     <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -23,7 +25,6 @@
     </div>
 
     <%# コピー元のターゲット %>
-    <% content_text = result.respond_to?(:content) ? result.content : result[:content] %>
     <p class="text-slate-800 dark:text-slate-100 text-base leading-relaxed" 
        data-clipboard-target="source">
       <%= content_text %>

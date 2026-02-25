@@ -16,28 +16,42 @@
   </div>
 </header>
 
-<div class="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
-  <div id="form_errors">
-    <%= render "rephrases/form_errors", error_message: @error_message, field_errors: @field_errors %>
+<div class="max-w-4xl mx-auto p-4 sm:p-6 space-y-6" data-controller="rephrase" data-rephrase-max-length-value="300">
+  <%
+    content_error_messages = []
+    content_error_messages.concat(Array(@field_errors&.dig(:content)))
+    content_error_messages.concat(Array(@field_errors&.dig("content")))
+    content_error_messages.concat(Array(@rephrase&.errors&.[](:content)))
+    has_content_error = content_error_messages.compact.any?(&:present?)
+    content_section_classes = if has_content_error
+      "overflow-hidden rounded-2xl border border-[var(--color-error)] bg-red-50/20 shadow-sm transition-all focus-within:ring-2 focus-within:ring-[var(--color-error)]/20 dark:border-red-900 dark:bg-red-950/20"
+    else
+      "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-800 dark:bg-slate-900"
+    end
+  %>
+  <div id="error_modal_container" data-rephrase-target="errorModalContainer">
+    <%= render "rephrases/error_modal", error_message: @error_message, field_errors: @field_errors, rephrase: @rephrase %>
   </div>
 
-  <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { controller: "rephrase", action: "turbo:submit-end->rephrase#restoreFormState" } do |form| %>
-    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-800 dark:bg-slate-900">
+  <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { action: "input->rephrase#validateContent submit->rephrase#submit turbo:before-fetch-response->rephrase#restoreFormState turbo:submit-end->rephrase#restoreFormState" } do |form| %>
+    <section class="<%= content_section_classes %>" data-rephrase-target="contentSection">
       <div class="flex justify-end border-b border-slate-100 bg-slate-50/50 p-1 dark:border-slate-800 dark:bg-slate-800/60">
         <button type="button" class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400" data-action="rephrase#clearContent">
           内容をクリア
         </button>
       </div>
 
-      <%= form.text_area :content, rows: 6, maxlength: 300, class: "min-h-[160px] w-full resize-none border-none bg-transparent p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500", placeholder: "ここに言い換えたい文章を入力してください...", data: { rephrase_target: "content" } %>
-      <% if @rephrase&.errors&.any? %>
-        <ul class="mt-2 list-disc pl-5 text-sm text-red-500 dark:text-red-400">
-          <% @rephrase.errors.full_messages.each do |message| %>
-            <li><%= message %></li>
-          <% end %>
-        </ul>
-      <% end %>
-      <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">※個人情報（氏名・住所など）は入力しないでください</p>
+      <%= form.text_area :content,
+                         rows: 6,
+                         value: params.dig(:rephrase, :content),
+                         class: "min-h-[160px] w-full resize-none border-none bg-transparent p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500",
+                         placeholder: "ここに言い換えたい文章を入力してください...",
+                         aria: { invalid: has_content_error, describedby: "rephrase-form-alert rephrase-input-note" },
+                         data: { rephrase_target: "content" } %>
+      <div class="mt-1 flex items-center justify-between px-1">
+        <p id="rephrase-input-note" class="text-sm text-gray-500 dark:text-slate-400">※個人情報（氏名・住所など）は入力しないでください</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400" data-rephrase-target="contentCount" aria-live="polite">0/300文字</p>
+      </div>
     </section>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -71,11 +85,13 @@
     </section>
 
     <div class="flex justify-center">
-      <%= form.submit "言い換え実行", class: "group relative w-full sm:w-80 h-14 bg-primary hover:bg-blue-700 text-white rounded-full font-bold shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3 transition-all active:scale-95 overflow-hidden" %>
+      <%= form.submit "言い換え実行",
+                      class: "group relative w-full sm:w-80 h-14 bg-primary hover:bg-blue-700 text-white rounded-full font-bold shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3 transition-all active:scale-95 overflow-hidden",
+                      data: { disable_with: false, original_label: "言い換え実行" } %>
     </div>
   <% end %>
 
-  <%= turbo_frame_tag "rephrase_result" do %>
+  <%= turbo_frame_tag "rephrase_result", data: { rephrase_target: "resultFrame" } do %>
     <%= render partial: "rephrase_result", locals: { rephrased_results: @rephrased_results } %>
   <% end %>
 

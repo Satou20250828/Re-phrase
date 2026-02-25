@@ -24,6 +24,9 @@ class RephrasesController < ApplicationController
   # 言い換え処理を実行し、結果と履歴をTurbo Streamで更新
   def create
     prepare_create_context
+    return render_content_blank_error if content_blank?
+    return render_content_length_error if content_too_long?
+
     process_create_result(safe_convert_result(rephrase_params[:content]))
     return render_validation_errors if @rephrase&.errors&.any?
 
@@ -163,7 +166,10 @@ class RephrasesController < ApplicationController
     @search_logs = build_search_logs_with(result)
     cleanup_old_search_logs!
     @search_log = @search_logs.first
-    @rephrased_results = fetch_recent_rephrases
+    # 常に「今回の送信」で生成された候補を表示する
+    @rephrased_results = @search_logs.map do |log|
+      Rephrase.new(content: log.converted_text.to_s)
+    end
   rescue ActiveRecord::ActiveRecordError => e
     handle_create_persistence_error(e, result)
   end
@@ -195,9 +201,41 @@ class RephrasesController < ApplicationController
     @search_logs = SearchLog.order(created_at: :desc).limit(10)
 
     respond_to do |format|
-      format.turbo_stream { render :index, status: :unprocessable_content, formats: [:html] }
+      format.turbo_stream { render_validation_errors_turbo_stream }
       format.html { render :index, status: :unprocessable_content }
     end
+  end
+
+  def render_validation_errors_turbo_stream
+    render turbo_stream: turbo_stream.update(
+      "error_modal_container",
+      partial: "rephrases/error_modal",
+      locals: { error_message: @error_message, field_errors: @field_errors, rephrase: @rephrase }
+    ), status: :ok
+  end
+
+  def content_too_long?
+    rephrase_params[:content].to_s.length > 300
+  end
+
+  def content_blank?
+    rephrase_params[:content].to_s.strip.blank?
+  end
+
+  def render_content_blank_error
+    @field_errors = { content: ["入力してください"] }
+    @error_message = "入力文が空です。内容を入力して再度お試しください。"
+    @search_logs = SearchLog.order(created_at: :desc).limit(10)
+    @rephrased_results = fetch_recent_rephrases
+    render_validation_errors
+  end
+
+  def render_content_length_error
+    @field_errors = { content: ["300文字以内で入力してください"] }
+    @error_message = "入力文が300文字を超えています。文字数を減らして再度お試しください。"
+    @search_logs = SearchLog.order(created_at: :desc).limit(10)
+    @rephrased_results = fetch_recent_rephrases
+    render_validation_errors
   end
 
   # Turbo Stream と通常HTMLのレスポンスを切り替え

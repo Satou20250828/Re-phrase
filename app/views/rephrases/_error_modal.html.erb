@@ -1,0 +1,90 @@
+<%
+  merged_field_errors = Hash.new { |h, k| h[k] = [] }
+  field_errors.to_h.each do |attribute, messages|
+    merged_field_errors[attribute.to_sym].concat(Array(messages).map(&:to_s))
+  end
+
+  local_rephrase = local_assigns[:rephrase]
+  if local_rephrase&.errors&.any?
+    local_rephrase.errors.each do |error|
+      merged_field_errors[error.attribute.to_sym] << error.message.to_s
+    end
+  end
+
+  merged_field_errors.each { |attribute, messages| merged_field_errors[attribute] = messages.uniq }
+  has_error_message = error_message.present?
+  has_field_errors = merged_field_errors.values.any?(&:present?)
+  field_labels = {
+    content: "入力文",
+    scene: "シーン",
+    target: "相手の関係性",
+    context: "状況",
+    category: "カテゴリ",
+    category_id: "カテゴリ",
+    query: "検索文",
+    converted_text: "言い換え結果",
+    hit_type: "判定種別",
+    rephrase: "言い換え"
+  }
+%>
+
+<% if has_error_message || has_field_errors %>
+  <div id="rephrase-error-modal"
+       class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4"
+       role="alertdialog"
+       aria-modal="true"
+       aria-labelledby="rephrase-error-modal-title"
+       aria-describedby="rephrase-error-modal-description"
+       >
+    <section class="pointer-events-auto w-full max-w-xl rounded-2xl border border-[var(--color-error)]/40 bg-white p-6 shadow-2xl dark:border-red-900/60 dark:bg-slate-900"
+             data-modal-panel="true">
+      <div class="flex items-start gap-3">
+        <span class="material-symbols-outlined mt-0.5 text-2xl text-[var(--color-error)] dark:text-red-300">error</span>
+        <div class="w-full space-y-3">
+          <h2 id="rephrase-error-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">入力内容に修正が必要です</h2>
+          <p id="rephrase-error-modal-description" class="text-sm text-slate-700 dark:text-slate-300">
+            原因を確認して修正後に、もう一度「言い換え実行」を押してください。
+          </p>
+
+          <% if has_error_message %>
+            <p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200"><%= error_message %></p>
+          <% end %>
+
+          <% if has_field_errors %>
+            <ul class="space-y-2">
+              <% merged_field_errors.each do |attribute, messages| %>
+                <% next if messages.blank? %>
+                <% label = field_labels[attribute.to_sym] || attribute.to_s.humanize %>
+                <% messages.each do |message| %>
+                  <% guidance =
+                    if attribute.to_sym == :content && message.include?("300")
+                      "入力文が長すぎます。300文字以内に短くしてください。"
+                    elsif message.include?("入力してください") || message.include?("blank")
+                      "#{label}が未入力です。内容を入力して再度送信してください。"
+                    elsif message.include?("invalid")
+                      "#{label}の形式が正しくありません。入力内容を見直して再入力してください。"
+                    else
+                      "#{label}に問題があります。#{message}。内容を確認して修正してください。"
+                    end
+                  %>
+                  <li class="rounded-lg border border-red-100 bg-red-50/60 px-3 py-2 text-sm leading-relaxed text-red-900 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-100">
+                    <span class="font-semibold">原因:</span> <%= "#{label}: #{message}" %><br>
+                    <span class="font-semibold">対処:</span> <%= guidance %>
+                  </li>
+                <% end %>
+              <% end %>
+            </ul>
+          <% end %>
+
+          <div class="pt-2 text-right">
+            <button type="button"
+                    class="rounded-full bg-[var(--color-error)] px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700"
+                    data-action="rephrase#closeErrorModal">
+              閉じる
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+<% end %>
