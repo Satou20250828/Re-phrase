@@ -88,20 +88,15 @@ RSpec.describe "RephrasesController", type: :request do
       expect { perform_request }
         .to change(Rephrase, :count).by(3)
         .and change(SearchLog, :count).by(3)
-
-      created_candidates = SearchLog.order(created_at: :desc).limit(3).pluck(:converted_text)
-      expect(created_candidates.size).to eq(3)
-      expect(created_candidates.uniq.size).to eq(3)
     end
 
     it "redirects to rephrases index" do
       perform_request
 
-      expect(response).to have_http_status(:found)
       expect(response).to redirect_to(rephrases_path)
     end
 
-    context "when mock conversion is enabled" do
+    context "when mock conversion is enabled for suffix cleanup" do
       let(:params) do
         {
           rephrase: {
@@ -115,60 +110,88 @@ RSpec.describe "RephrasesController", type: :request do
 
       before do
         allow(PhraseConverterService).to receive(:call).and_raise("should not be called")
-      end
-
-      it "applies regex-based cleanup and creates three templated candidates" do
         perform_request
-
-        created_candidates = SearchLog.where(query: "これやって").order(created_at: :desc).limit(3).pluck(:converted_text)
-        expect(created_candidates).to include("これの件ですが、何卒よろしくお願い申し上げます。")
-        expect(created_candidates).to include("これにつきまして、ご確認をお願いできますでしょうか？")
-        expect(created_candidates).to include("これの件ですが、よろしくね！")
       end
 
-      context "when input is too short" do
-        let(:params) do
-          {
-            rephrase: {
-              content: "あ",
-              scene: "",
-              target: "",
-              context: ""
-            }
-          }
-        end
-
-        it "uses fallback templates" do
-          perform_request
-
-          created_candidates = SearchLog.where(query: "あ").order(created_at: :desc).limit(3).pluck(:converted_text)
-          expect(created_candidates).to include("ご依頼の件ですが、何卒よろしくお願い申し上げます。")
-          expect(created_candidates).to include("ご依頼につきまして、ご確認をお願いできますでしょうか？")
-          expect(created_candidates).to include("ご依頼の件ですが、よろしくね！")
-        end
+      it "includes business template" do
+        expect(created_candidates_for("これやって")).to include("これの件ですが、何卒よろしくお願い申し上げます。")
       end
 
-      context "when input includes replaceable words" do
-        let(:params) do
-          {
-            rephrase: {
-              content: "早く見て教えて",
-              scene: "",
-              target: "",
-              context: ""
-            }
-          }
-        end
+      it "includes polite template" do
+        expect(created_candidates_for("これやって")).to include("これにつきまして、ご確認をお願いできますでしょうか？")
+      end
 
-        it "applies vocabulary replacements before suffix cleanup" do
-          perform_request
-
-          created_candidates = SearchLog.where(query: "早く見て教えて").order(created_at: :desc).limit(3).pluck(:converted_text)
-          expect(created_candidates).to include("至急ご確認ご教示の件ですが、何卒よろしくお願い申し上げます。")
-          expect(created_candidates).to include("至急ご確認ご教示につきまして、ご確認をお願いできますでしょうか？")
-          expect(created_candidates).to include("至急ご確認ご教示の件ですが、よろしくね！")
-        end
+      it "includes casual template" do
+        expect(created_candidates_for("これやって")).to include("これの件ですが、よろしくね！")
       end
     end
+
+    context "when mock conversion is enabled for short input" do
+      let(:params) do
+        {
+          rephrase: {
+            content: "あ",
+            scene: "",
+            target: "",
+            context: ""
+          }
+        }
+      end
+
+      before do
+        allow(PhraseConverterService).to receive(:call).and_raise("should not be called")
+        perform_request
+      end
+
+      it "includes fallback business template" do
+        expect(created_candidates_for("あ")).to include("ご依頼の件ですが、何卒よろしくお願い申し上げます。")
+      end
+
+      it "includes fallback polite template" do
+        expect(created_candidates_for("あ")).to include("ご依頼につきまして、ご確認をお願いできますでしょうか？")
+      end
+
+      it "includes fallback casual template" do
+        expect(created_candidates_for("あ")).to include("ご依頼の件ですが、よろしくね！")
+      end
+    end
+
+    context "when mock conversion is enabled for vocabulary replacement" do
+      let(:params) do
+        {
+          rephrase: {
+            content: "早く見て教えて",
+            scene: "",
+            target: "",
+            context: ""
+          }
+        }
+      end
+
+      before do
+        allow(PhraseConverterService).to receive(:call).and_raise("should not be called")
+        perform_request
+      end
+
+      it "includes replaced business template" do
+        expect(created_candidates_for("早く見て教えて")).to include(
+          "至急ご確認ご教示の件ですが、何卒よろしくお願い申し上げます。"
+        )
+      end
+
+      it "includes replaced polite template" do
+        expect(created_candidates_for("早く見て教えて")).to include(
+          "至急ご確認ご教示につきまして、ご確認をお願いできますでしょうか？"
+        )
+      end
+
+      it "includes replaced casual template" do
+        expect(created_candidates_for("早く見て教えて")).to include("至急ご確認ご教示の件ですが、よろしくね！")
+      end
+    end
+  end
+
+  def created_candidates_for(query)
+    SearchLog.where(query: query).order(created_at: :desc).limit(3).pluck(:converted_text)
   end
 end

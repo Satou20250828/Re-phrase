@@ -2,6 +2,7 @@
 # rubocop:disable Metrics/ClassLength
 class RephrasesController < ApplicationController
   DEFAULT_CATEGORY_NAME = "default".freeze
+  MIN_REPHRASE_CANDIDATES = 3
   VOCAB_REPLACEMENTS = {
     /早く/ => "至急",
     /すぐ/ => "早急に",
@@ -53,13 +54,10 @@ class RephrasesController < ApplicationController
   # Backward compatible endpoint for legacy request specs.
   def search
     query = params[:q].to_s
-    result = PhraseConverterService.call(query: query, category_id: params[:category_id])
-    save_search_log_compat(query: query, category_id: params[:category_id], result: result)
-
+    result = search_result(query)
     render plain: result[:result_text].to_s, status: :ok
   rescue StandardError => e
-    Rails.logger.error("[rephrase#search] エラー: #{e.class} - #{e.message}")
-    render plain: query, status: :ok
+    handle_search_error(error: e, query: query)
   end
 
   private
@@ -74,6 +72,17 @@ class RephrasesController < ApplicationController
     )
   rescue StandardError => e
     Rails.logger.warn("[rephrase#search] SearchLog保存失敗: #{e.class} - #{e.message}")
+  end
+
+  def search_result(query)
+    result = PhraseConverterService.call(query: query, category_id: params[:category_id])
+    save_search_log_compat(query: query, category_id: params[:category_id], result: result)
+    result
+  end
+
+  def handle_search_error(error:, query:)
+    Rails.logger.error("[rephrase#search] エラー: #{error.class} - #{error.message}")
+    render plain: query, status: :ok
   end
 
   # フォームから受け取る言い換え入力値
@@ -308,27 +317,46 @@ class RephrasesController < ApplicationController
   end
 
   def split_rephrase_candidates(text)
+    candidates = parsed_candidates(text)
+    candidates = add_template_fallbacks(candidates)
+    pad_fallback_candidates(candidates).first(MIN_REPHRASE_CANDIDATES)
+  end
+
+  def parsed_candidates(text)
     split_items = text.to_s.split(/\n?\s*\d+[.)]?\s*(?:\[[^\]]+\]\s*)?/)
-    candidates = split_items.map { |item| item.to_s.strip }.compact_blank.map do |item|
-      item.sub(/\A(?:短文|標準|フォーマル)\s*[:：]\s*/, "").strip
-    end
-
+    candidates = split_items.map { |item| normalized_candidate(item) }.compact_blank
     candidates = [text.to_s.strip] if candidates.blank?
-    candidates = candidates.uniq.first(3)
+    candidates.uniq.first(MIN_REPHRASE_CANDIDATES)
+  end
 
-    if candidates.size < 3
-      seed_text = candidates.first.presence || rephrase_params[:content].to_s.strip
-      candidates.concat(fallback_rephrase_candidates(seed_text).reject { |candidate| candidates.include?(candidate) })
+  def normalized_candidate(item)
+    item.to_s.strip.sub(/\A(?:短文|標準|フォーマル)\s*[:：]\s*/, "").strip
+  end
+
+  def add_template_fallbacks(candidates)
+    return candidates if candidates.size >= MIN_REPHRASE_CANDIDATES
+
+    seed_text = candidates.first.presence || rephrase_params[:content].to_s.strip
+    fallback_rephrase_candidates(seed_text).each do |candidate|
+      break if candidates.size >= MIN_REPHRASE_CANDIDATES
+
+      candidates << candidate unless candidates.include?(candidate)
     end
+    candidates
+  end
 
-    while candidates.size < 3
-      suffix = candidates.size + 1
-      fallback_text = "#{rephrase_params[:content].to_s.strip}（提案#{suffix}）".strip.truncate(300, omission: "")
-      candidates << fallback_text unless fallback_text.blank? || candidates.include?(fallback_text)
+  def pad_fallback_candidates(candidates)
+    while candidates.size < MIN_REPHRASE_CANDIDATES
+      fallback_text = fallback_candidate_text(candidates.size + 1)
       break if fallback_text.blank?
-    end
 
-    candidates.first(3)
+      candidates << fallback_text unless candidates.include?(fallback_text)
+    end
+    candidates
+  end
+
+  def fallback_candidate_text(suffix)
+    "#{rephrase_params[:content].to_s.strip}（提案#{suffix}）".strip.truncate(300, omission: "")
   end
 
   def fallback_rephrase_candidates(text)
