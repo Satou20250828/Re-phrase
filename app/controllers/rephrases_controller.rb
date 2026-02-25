@@ -39,8 +39,13 @@ class RephrasesController < ApplicationController
     search_log = SearchLog.find_by(id: params[:id])
     return head :not_found unless search_log
 
+    dom_id = ActionView::RecordIdentifier.dom_id(search_log)
     search_log.destroy!
-    head :no_content
+
+    respond_to do |format|
+      format.turbo_stream { render turbo_stream: turbo_stream.remove(dom_id), status: :ok }
+      format.any { head :no_content }
+    end
   rescue StandardError => e
     Rails.logger.error("[rephrase#destroy_history] エラー: #{e.class} - #{e.message}")
     head :unprocessable_content
