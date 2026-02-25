@@ -25,22 +25,26 @@ RSpec.describe SearchLog, type: :model do
       expect(search_log).to be_valid
     end
 
-    include_examples "validates presence of attribute",
-                     :search_log,
-                     :query,
-                     :blank_query
+    it_behaves_like "validates presence of attribute",
+                    :search_log,
+                    :query,
+                    :blank_query
 
-    include_examples "validates presence of attribute",
-                     :search_log,
-                     :converted_text,
-                     :blank_converted_text
+    it_behaves_like "validates presence of attribute",
+                    :search_log,
+                    :converted_text,
+                    :blank_converted_text
 
     context "when hit_type is nil" do
       subject(:search_log) { build(:search_log, hit_type: nil) }
 
-      it "normalizes to none and stays valid" do
+      it "normalizes to none" do
         search_log.validate
         expect(search_log.hit_type).to eq("none")
+      end
+
+      it "is valid after normalization" do
+        search_log.validate
         expect(search_log).to be_valid
       end
     end
@@ -48,26 +52,34 @@ RSpec.describe SearchLog, type: :model do
     context "when hit_type is blank" do
       subject(:search_log) { build(:search_log, :blank_hit_type) }
 
-      it "normalizes to none and stays valid" do
+      it "normalizes to none" do
         search_log.validate
         expect(search_log.hit_type).to eq("none")
+      end
+
+      it "is valid after normalization" do
+        search_log.validate
         expect(search_log).to be_valid
       end
     end
 
-    include_examples "validates max length of attribute",
-                     :search_log,
-                     :converted_text,
-                     :too_long
+    it_behaves_like "validates max length of attribute",
+                    :search_log,
+                    :converted_text,
+                    :too_long
   end
 
   describe "callbacks" do
     context "when category is missing" do
       subject(:search_log) { build(:search_log, :without_category) }
 
-      it "auto-completes category with default name" do
+      it "auto-completes category" do
         search_log.validate
         expect(search_log.category).to be_present
+      end
+
+      it "uses default category name" do
+        search_log.validate
         expect(search_log.category.name).to eq(SearchLog::DEFAULT_CATEGORY_NAME)
       end
     end

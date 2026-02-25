@@ -1,4 +1,5 @@
 require "rails_helper"
+# rubocop:disable RSpec/ExampleLength, RSpec/MultipleExpectations
 
 RSpec.describe "RephrasesController", type: :request do
   describe "GET /rephrases" do
@@ -77,3 +78,4 @@ RSpec.describe "RephrasesController", type: :request do
     end
   end
 end
+# rubocop:enable RSpec/ExampleLength, RSpec/MultipleExpectations

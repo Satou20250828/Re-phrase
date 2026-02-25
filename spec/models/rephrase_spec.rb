@@ -15,14 +15,14 @@ RSpec.describe Rephrase, type: :model do
       expect(rephrase).to be_valid
     end
 
-    include_examples "validates presence of attribute",
-                     :rephrase,
-                     :content,
-                     :invalid
+    it_behaves_like "validates presence of attribute",
+                    :rephrase,
+                    :content,
+                    :invalid
 
-    include_examples "validates max length of attribute",
-                     :rephrase,
-                     :content,
-                     :too_long
+    it_behaves_like "validates max length of attribute",
+                    :rephrase,
+                    :content,
+                    :too_long
   end
 end

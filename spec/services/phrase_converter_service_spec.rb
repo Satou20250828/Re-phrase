@@ -1,29 +1,32 @@
 require "rails_helper"
+# rubocop:disable RSpec/MultipleExpectations
 
 RSpec.describe PhraseConverterService do
   describe "#call" do
     subject(:result) do
       described_class.new(
         query: query,
-        category_id: category_id,
-        scene: scene,
-        target: target,
-        context: context
+        category_id: nil,
+        scene: "職場",
+        target: "目上",
+        context: "依頼"
       ).call
     end
 
     let(:query) { "ご確認お願いします" }
-    let(:category_id) { nil }
-    let(:scene) { "職場" }
-    let(:target) { "目上" }
-    let(:context) { "依頼" }
 
     context "when mock mode is enabled" do
-      before { stub_phrase_converter_env(mock: true, api_key: "dummy") }
+      before do
+        stub_phrase_converter_env(mock: true, api_key: "dummy")
+        stub_openai_client(chat_response: {})
+      end
 
       it "does not instantiate OpenAI client and returns fallback text" do
-        expect(OpenAI::Client).not_to receive(:new) if defined?(OpenAI::Client)
+        result
+        expect(OpenAI::Client).not_to have_received(:new)
+      end
 
+      it "returns fallback payload" do
         expect(result).to include(
           result_text: query,
           safety_mode_applied: true,
@@ -63,11 +66,15 @@ RSpec.describe PhraseConverterService do
       before do
         stub_phrase_converter_env(mock: false, api_key: "test-openai-key")
         stub_openai_client(chat_error: error)
+        allow(Rails.logger).to receive(:warn)
       end
 
       it "logs warning and returns fallback result" do
-        expect(Rails.logger).to receive(:warn).with(include("AI generation failed"))
+        result
+        expect(Rails.logger).to have_received(:warn).with(include("AI generation failed"))
+      end
 
+      it "returns fallback result" do
         expect(result).to include(
           result_text: query,
           safety_mode_applied: true,
@@ -77,15 +84,15 @@ RSpec.describe PhraseConverterService do
     end
 
     context "when API returns 401 unauthorized" do
-      include_examples "falls back safely when AI generation fails", StandardError.new("401 Unauthorized")
+      it_behaves_like "falls back safely when AI generation fails", StandardError.new("401 Unauthorized")
     end
 
     context "when API returns 429 rate limit" do
-      include_examples "falls back safely when AI generation fails", StandardError.new("429 Too Many Requests")
+      it_behaves_like "falls back safely when AI generation fails", StandardError.new("429 Too Many Requests")
     end
 
     context "when API request times out" do
-      include_examples "falls back safely when AI generation fails", Timeout::Error.new("execution expired")
+      it_behaves_like "falls back safely when AI generation fails", Timeout::Error.new("execution expired")
     end
 
     context "when API responds successfully but content is empty" do
@@ -132,3 +139,4 @@ RSpec.describe PhraseConverterService do
     end
   end
 end
+# rubocop:enable RSpec/MultipleExpectations

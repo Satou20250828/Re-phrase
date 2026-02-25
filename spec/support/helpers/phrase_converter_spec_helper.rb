@@ -1,15 +1,8 @@
+# Shared test helpers for PhraseConverterService specs.
 module PhraseConverterSpecHelper
   def stub_phrase_converter_env(mock:, api_key: nil, model: "gpt-4o-mini")
-    allow(ENV).to receive(:fetch).and_call_original
-    allow(ENV).to receive(:[]).and_call_original
-
-    allow(ENV).to receive(:fetch).with("REPHRASE_USE_MOCK", true).and_return(mock.to_s)
-    allow(ENV).to receive(:fetch).with("OPENAI_MODEL", "gpt-4o-mini").and_return(model)
-    allow(ENV).to receive(:[]).with("OPENAI_API_KEY").and_return(api_key)
-
-    return unless api_key.present?
-
-    allow(ENV).to receive(:fetch).with("OPENAI_API_KEY").and_return(api_key)
+    stub_phrase_converter_env_defaults(mock: mock, model: model)
+    stub_phrase_converter_api_key(api_key)
   end
 
   def stub_openai_client(chat_response: nil, chat_error: nil)
@@ -28,6 +21,32 @@ module PhraseConverterSpecHelper
   end
 
   private
+
+  def stub_phrase_converter_env_defaults(mock:, model:)
+    stub_env_fallbacks
+    stub_phrase_converter_fetch_values(mock: mock, model: model)
+  end
+
+  def stub_env_fallbacks
+    allow(ENV).to receive(:fetch).and_call_original
+    allow(ENV).to receive(:[]).and_call_original
+  end
+
+  def stub_phrase_converter_fetch_values(mock:, model:)
+    allow(ENV).to receive(:fetch)
+      .with("REPHRASE_USE_MOCK", true)
+      .and_return(mock.to_s)
+    allow(ENV).to receive(:fetch)
+      .with("OPENAI_MODEL", "gpt-4o-mini")
+      .and_return(model)
+  end
+
+  def stub_phrase_converter_api_key(api_key)
+    allow(ENV).to receive(:[]).with("OPENAI_API_KEY").and_return(api_key)
+    return if api_key.blank?
+
+    allow(ENV).to receive(:fetch).with("OPENAI_API_KEY").and_return(api_key)
+  end
 
   def ensure_openai_client_constant!
     stub_const("OpenAI", Module.new) unless defined?(OpenAI)
