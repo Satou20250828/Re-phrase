@@ -147,6 +147,28 @@ RSpec.describe "RephrasesController", type: :request do
           expect(created_candidates).to include("ご依頼の件ですが、よろしくね！")
         end
       end
+
+      context "when input includes replaceable words" do
+        let(:params) do
+          {
+            rephrase: {
+              content: "早く見て教えて",
+              scene: "",
+              target: "",
+              context: ""
+            }
+          }
+        end
+
+        it "applies vocabulary replacements before suffix cleanup" do
+          perform_request
+
+          created_candidates = SearchLog.where(query: "早く見て教えて").order(created_at: :desc).limit(3).pluck(:converted_text)
+          expect(created_candidates).to include("至急ご確認ご教示の件ですが、何卒よろしくお願い申し上げます。")
+          expect(created_candidates).to include("至急ご確認ご教示につきまして、ご確認をお願いできますでしょうか？")
+          expect(created_candidates).to include("至急ご確認ご教示の件ですが、よろしくね！")
+        end
+      end
     end
   end
 end

@@ -2,6 +2,13 @@
 # rubocop:disable Metrics/ClassLength
 class RephrasesController < ApplicationController
   DEFAULT_CATEGORY_NAME = "default".freeze
+  VOCAB_REPLACEMENTS = {
+    /早く/ => "至急",
+    /すぐ/ => "早急に",
+    /あとで/ => "後ほど",
+    /見て/ => "ご確認",
+    /教えて/ => "ご教示"
+  }.freeze
 
   # 直近の検索履歴を表示する初期画面
   def index
@@ -346,10 +353,19 @@ class RephrasesController < ApplicationController
     sanitized = text.to_s.strip.gsub(/\s+/, " ")
     return nil if sanitized.blank? || sanitized.length < 2
 
+    sanitized = apply_vocab_replacements(sanitized)
     sanitized = sanitized.sub(/(?:やって|して|だよ|だ)\z/, "").strip
     return nil if sanitized.blank? || sanitized.length < 2
 
     sanitized.gsub(/[、。]+\z/, "").strip
+  end
+
+  def apply_vocab_replacements(text)
+    replaced = text.to_s.dup
+    VOCAB_REPLACEMENTS.each do |pattern, replacement|
+      replaced = replaced.gsub(pattern, replacement)
+    end
+    replaced
   end
 
   def default_template_rephrases

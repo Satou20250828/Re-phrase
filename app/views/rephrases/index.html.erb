@@ -21,7 +21,7 @@
     <%= render "rephrases/form_errors", error_message: @error_message, field_errors: @field_errors %>
   </div>
 
-  <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { controller: "rephrase" } do |form| %>
+  <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { controller: "rephrase", action: "turbo:submit-end->rephrase#restoreFormState" } do |form| %>
     <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-800 dark:bg-slate-900">
       <div class="flex justify-end border-b border-slate-100 bg-slate-50/50 p-1 dark:border-slate-800 dark:bg-slate-800/60">
         <button type="button" class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400" data-action="rephrase#clearContent">
