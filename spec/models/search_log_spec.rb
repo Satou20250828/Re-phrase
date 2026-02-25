@@ -25,31 +25,15 @@ RSpec.describe SearchLog, type: :model do
       expect(search_log).to be_valid
     end
 
-    context "when query is blank" do
-      subject(:search_log) { build(:search_log, query: nil) }
+    include_examples "validates presence of attribute",
+                     :search_log,
+                     :query,
+                     :blank_query
 
-      it "is invalid" do
-        expect(search_log).to be_invalid
-      end
-
-      it "adds a blank error" do
-        search_log.validate
-        expect(search_log.errors[:query]).to include("can't be blank")
-      end
-    end
-
-    context "when converted_text is blank" do
-      subject(:search_log) { build(:search_log, converted_text: nil) }
-
-      it "is invalid" do
-        expect(search_log).to be_invalid
-      end
-
-      it "adds a blank error" do
-        search_log.validate
-        expect(search_log.errors[:converted_text]).to include("can't be blank")
-      end
-    end
+    include_examples "validates presence of attribute",
+                     :search_log,
+                     :converted_text,
+                     :blank_converted_text
 
     context "when hit_type is nil" do
       subject(:search_log) { build(:search_log, hit_type: nil) }
@@ -71,18 +55,10 @@ RSpec.describe SearchLog, type: :model do
       end
     end
 
-    context "when converted_text exceeds 300 characters" do
-      subject(:search_log) { build(:search_log, :too_long) }
-
-      it "is invalid" do
-        expect(search_log).to be_invalid
-      end
-
-      it "adds a too long error" do
-        search_log.validate
-        expect(search_log.errors[:converted_text]).to include("is too long (maximum is 300 characters)")
-      end
-    end
+    include_examples "validates max length of attribute",
+                     :search_log,
+                     :converted_text,
+                     :too_long
   end
 
   describe "callbacks" do

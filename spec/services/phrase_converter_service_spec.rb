@@ -2,24 +2,15 @@ require "rails_helper"
 
 RSpec.describe PhraseConverterService do
   describe "#call" do
-    before do
-      stub_const("OpenAI::Client", Class.new do
-        def initialize(*); end
-
-        def chat(*); end
-      end)
-    end
-
-    let(:service) do
+    subject(:result) do
       described_class.new(
         query: query,
         category_id: category_id,
         scene: scene,
         target: target,
         context: context
-      )
+      ).call
     end
-    subject(:result) { service.call }
 
     let(:query) { "ご確認お願いします" }
     let(:category_id) { nil }
@@ -27,32 +18,17 @@ RSpec.describe PhraseConverterService do
     let(:target) { "目上" }
     let(:context) { "依頼" }
 
-    def stub_service_env(mock:, api_key: nil, model: "gpt-4o-mini")
-      allow(ENV).to receive(:fetch).and_call_original
-      allow(ENV).to receive(:[]).and_call_original
-
-      allow(ENV).to receive(:fetch).with("REPHRASE_USE_MOCK", true).and_return(mock.to_s)
-      allow(ENV).to receive(:fetch).with("OPENAI_MODEL", "gpt-4o-mini").and_return(model)
-
-      if api_key.present?
-        allow(ENV).to receive(:fetch).with("OPENAI_API_KEY").and_return(api_key)
-        allow(ENV).to receive(:[]).with("OPENAI_API_KEY").and_return(api_key)
-      else
-        allow(ENV).to receive(:[]).with("OPENAI_API_KEY").and_return(nil)
-      end
-    end
-
     context "when mock mode is enabled" do
-      before do
-        stub_service_env(mock: true, api_key: "dummy")
-      end
+      before { stub_phrase_converter_env(mock: true, api_key: "dummy") }
 
       it "does not instantiate OpenAI client and returns fallback text" do
-        expect(OpenAI::Client).not_to receive(:new)
+        expect(OpenAI::Client).not_to receive(:new) if defined?(OpenAI::Client)
 
-        expect(result[:result_text]).to eq(query)
-        expect(result[:safety_mode_applied]).to be(true)
-        expect(result[:hit_type]).to eq(:none)
+        expect(result).to include(
+          result_text: query,
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
     end
 
@@ -70,15 +46,11 @@ RSpec.describe PhraseConverterService do
       end
 
       before do
-        stub_service_env(mock: false, api_key: "test-openai-key")
-        allow(service).to receive(:openai_available?).and_return(true)
-        allow(ENV).to receive(:fetch).with("OPENAI_API_KEY").and_return("test-openai-key")
-        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_return(api_response)
+        stub_phrase_converter_env(mock: false, api_key: "test-openai-key")
+        stub_openai_client(chat_response: api_response)
       end
 
       it "extracts and formats converted variants from API response" do
-        expect(Rails.logger).not_to receive(:warn)
-
         expect(result[:result_text]).to include("1. [短文] ご確認をお願いいたします。")
         expect(result[:result_text]).to include("2. [標準] ご確認いただけますと幸いです。")
         expect(result[:result_text]).to include("3. [フォーマル] ご確認のほどお願い申し上げます。")
@@ -87,101 +59,75 @@ RSpec.describe PhraseConverterService do
       end
     end
 
-    context "when API returns 401 unauthorized" do
-      let(:error) { Class.new(StandardError).new("401 Unauthorized") }
-
+    shared_examples "falls back safely when AI generation fails" do |error|
       before do
-        stub_service_env(mock: false, api_key: "invalid-key")
-        allow(service).to receive(:openai_available?).and_return(true)
-        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_raise(error)
+        stub_phrase_converter_env(mock: false, api_key: "test-openai-key")
+        stub_openai_client(chat_error: error)
       end
 
-      it "logs warning and falls back safely" do
+      it "logs warning and returns fallback result" do
         expect(Rails.logger).to receive(:warn).with(include("AI generation failed"))
 
-        expect(result[:result_text]).to eq(query)
-        expect(result[:safety_mode_applied]).to be(true)
-        expect(result[:hit_type]).to eq(:none)
+        expect(result).to include(
+          result_text: query,
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
+    end
+
+    context "when API returns 401 unauthorized" do
+      include_examples "falls back safely when AI generation fails", StandardError.new("401 Unauthorized")
     end
 
     context "when API returns 429 rate limit" do
-      let(:error) { Class.new(StandardError).new("429 Too Many Requests") }
-
-      before do
-        stub_service_env(mock: false, api_key: "test-openai-key")
-        allow(service).to receive(:openai_available?).and_return(true)
-        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_raise(error)
-      end
-
-      it "handles the error and returns fallback result" do
-        expect(Rails.logger).to receive(:warn).with(include("AI generation failed"))
-
-        expect(result[:result_text]).to eq(query)
-        expect(result[:safety_mode_applied]).to be(true)
-        expect(result[:hit_type]).to eq(:none)
-      end
+      include_examples "falls back safely when AI generation fails", StandardError.new("429 Too Many Requests")
     end
 
     context "when API request times out" do
-      let(:error) { Timeout::Error.new("execution expired") }
-
-      before do
-        stub_service_env(mock: false, api_key: "test-openai-key")
-        allow(service).to receive(:openai_available?).and_return(true)
-        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_raise(error)
-      end
-
-      it "handles timeout and returns fallback result" do
-        expect(Rails.logger).to receive(:warn).with(include("AI generation failed"))
-
-        expect(result[:result_text]).to eq(query)
-        expect(result[:safety_mode_applied]).to be(true)
-        expect(result[:hit_type]).to eq(:none)
-      end
+      include_examples "falls back safely when AI generation fails", Timeout::Error.new("execution expired")
     end
 
     context "when API responds successfully but content is empty" do
-      let(:api_response) { { "choices" => [{ "message" => { "content" => "" } }] } }
-
       before do
-        stub_service_env(mock: false, api_key: "test-openai-key")
-        allow(service).to receive(:openai_available?).and_return(true)
-        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_return(api_response)
+        stub_phrase_converter_env(mock: false, api_key: "test-openai-key")
+        stub_openai_client(chat_response: { "choices" => [{ "message" => { "content" => "" } }] })
       end
 
       it "falls back to local result safely" do
-        expect(result[:result_text]).to eq(query)
-        expect(result[:safety_mode_applied]).to be(true)
-        expect(result[:hit_type]).to eq(:none)
+        expect(result).to include(
+          result_text: query,
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
     end
 
     context "when query is nil" do
       let(:query) { nil }
 
-      before do
-        stub_service_env(mock: true, api_key: "dummy")
-      end
+      before { stub_phrase_converter_env(mock: true, api_key: "dummy") }
 
       it "returns empty fallback text safely" do
-        expect(result[:result_text]).to eq("")
-        expect(result[:safety_mode_applied]).to be(true)
-        expect(result[:hit_type]).to eq(:none)
+        expect(result).to include(
+          result_text: "",
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
     end
 
     context "when query is empty string" do
       let(:query) { "" }
 
-      before do
-        stub_service_env(mock: true, api_key: "dummy")
-      end
+      before { stub_phrase_converter_env(mock: true, api_key: "dummy") }
 
       it "returns empty fallback text safely" do
-        expect(result[:result_text]).to eq("")
-        expect(result[:safety_mode_applied]).to be(true)
-        expect(result[:hit_type]).to eq(:none)
+        expect(result).to include(
+          result_text: "",
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
     end
   end

@@ -15,30 +15,14 @@ RSpec.describe Rephrase, type: :model do
       expect(rephrase).to be_valid
     end
 
-    context "when content is blank" do
-      subject(:rephrase) { build(:rephrase, :invalid) }
+    include_examples "validates presence of attribute",
+                     :rephrase,
+                     :content,
+                     :invalid
 
-      it "is invalid" do
-        expect(rephrase).to be_invalid
-      end
-
-      it "adds a blank error" do
-        rephrase.validate
-        expect(rephrase.errors[:content]).to include("can't be blank")
-      end
-    end
-
-    context "when content exceeds 300 characters" do
-      subject(:rephrase) { build(:rephrase, :too_long) }
-
-      it "is invalid" do
-        expect(rephrase).to be_invalid
-      end
-
-      it "adds a too long error" do
-        rephrase.validate
-        expect(rephrase.errors[:content]).to include("is too long (maximum is 300 characters)")
-      end
-    end
+    include_examples "validates max length of attribute",
+                     :rephrase,
+                     :content,
+                     :too_long
   end
 end

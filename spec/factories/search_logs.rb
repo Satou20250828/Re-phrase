@@ -12,6 +12,14 @@ FactoryBot.define do
       hit_type { nil }
     end
 
+    trait :blank_query do
+      query { nil }
+    end
+
+    trait :blank_converted_text do
+      converted_text { nil }
+    end
+
     trait :too_long do
       converted_text { "あ" * 301 }
     end

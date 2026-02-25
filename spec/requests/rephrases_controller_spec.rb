@@ -14,16 +14,8 @@ RSpec.describe "RephrasesController", type: :request do
   end
 
   describe "POST /rephrases" do
-    let(:params) do
-      {
-        rephrase: {
-          content: "確認お願いします",
-          scene: "",
-          target: "",
-          context: ""
-        }
-      }
-    end
+    let(:base_params) { attributes_for(:rephrase).slice(:content).merge(scene: "", target: "", context: "") }
+    let(:params) { { rephrase: base_params } }
 
     context "when valid" do
       before do
@@ -53,12 +45,7 @@ RSpec.describe "RephrasesController", type: :request do
     context "when invalid" do
       it "does not create SearchLog and returns turbo stream errors" do
         invalid_params = {
-          rephrase: {
-            content: " ",
-            scene: "",
-            target: "",
-            context: ""
-          }
+          rephrase: attributes_for(:rephrase, :invalid).slice(:content).merge(scene: "", target: "", context: "")
         }
 
         expect do
