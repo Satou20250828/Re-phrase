@@ -2,116 +2,186 @@ require "rails_helper"
 
 RSpec.describe PhraseConverterService do
   describe "#call" do
-    subject(:result) { described_class.new(query: query, category_id: category_id).call }
+    before do
+      stub_const("OpenAI::Client", Class.new do
+        def initialize(*); end
 
-    context "when an exact match exists" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
-      let(:query) { "「わかりました」→「承知いたしました」" }
+        def chat(*); end
+      end)
+    end
 
-      before do
-        FactoryBot.create(:rephrase, category: category, content: query)
-      end
+    let(:service) do
+      described_class.new(
+        query: query,
+        category_id: category_id,
+        scene: scene,
+        target: target,
+        context: context
+      )
+    end
+    subject(:result) { service.call }
 
-      it "returns :exact as hit_type" do
-        expect(result[:hit_type]).to eq(:exact)
-      end
+    let(:query) { "ご確認お願いします" }
+    let(:category_id) { nil }
+    let(:scene) { "職場" }
+    let(:target) { "目上" }
+    let(:context) { "依頼" }
 
-      it "returns false for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(false)
-      end
+    def stub_service_env(mock:, api_key: nil, model: "gpt-4o-mini")
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:[]).and_call_original
 
-      it "returns converted text as result_text" do
-        expect(result[:result_text]).to eq("承知いたしました")
+      allow(ENV).to receive(:fetch).with("REPHRASE_USE_MOCK", true).and_return(mock.to_s)
+      allow(ENV).to receive(:fetch).with("OPENAI_MODEL", "gpt-4o-mini").and_return(model)
+
+      if api_key.present?
+        allow(ENV).to receive(:fetch).with("OPENAI_API_KEY").and_return(api_key)
+        allow(ENV).to receive(:[]).with("OPENAI_API_KEY").and_return(api_key)
+      else
+        allow(ENV).to receive(:[]).with("OPENAI_API_KEY").and_return(nil)
       end
     end
 
-    context "when only a partial match exists" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
-      let(:query) { "すみません" }
-
+    context "when mock mode is enabled" do
       before do
-        FactoryBot.create(
-          :rephrase,
-          category: category,
-          content: "「すみません」→「失礼いたしました」"
-        )
+        stub_service_env(mock: true, api_key: "dummy")
       end
 
-      it "returns :partial as hit_type" do
-        expect(result[:hit_type]).to eq(:partial)
-      end
+      it "does not instantiate OpenAI client and returns fallback text" do
+        expect(OpenAI::Client).not_to receive(:new)
 
-      it "returns false for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(false)
-      end
-
-      it "returns converted text as result_text" do
-        expect(result[:result_text]).to eq("失礼いたしました")
-      end
-    end
-
-    context "when no match exists in the target category" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:other_category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
-      let(:query) { "未登録フレーズ" }
-
-      before do
-        FactoryBot.create(
-          :rephrase,
-          category: other_category,
-          content: "未登録フレーズ"
-        )
-      end
-
-      it "returns :none as hit_type" do
+        expect(result[:result_text]).to eq(query)
+        expect(result[:safety_mode_applied]).to be(true)
         expect(result[:hit_type]).to eq(:none)
       end
+    end
 
-      it "returns true for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(true)
+    context "when API mode is enabled and OpenAI returns success response" do
+      let(:api_response) do
+        {
+          "choices" => [
+            {
+              "message" => {
+                "content" => "1. [短文] ご確認をお願いいたします。\n2. [標準] ご確認いただけますと幸いです。\n3. [フォーマル] ご確認のほどお願い申し上げます。"
+              }
+            }
+          ]
+        }
       end
 
-      it "returns the original query as result_text" do
+      before do
+        stub_service_env(mock: false, api_key: "test-openai-key")
+        allow(service).to receive(:openai_available?).and_return(true)
+        allow(ENV).to receive(:fetch).with("OPENAI_API_KEY").and_return("test-openai-key")
+        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_return(api_response)
+      end
+
+      it "extracts and formats converted variants from API response" do
+        expect(Rails.logger).not_to receive(:warn)
+
+        expect(result[:result_text]).to include("1. [短文] ご確認をお願いいたします。")
+        expect(result[:result_text]).to include("2. [標準] ご確認いただけますと幸いです。")
+        expect(result[:result_text]).to include("3. [フォーマル] ご確認のほどお願い申し上げます。")
+        expect(result[:safety_mode_applied]).to be(false)
+        expect(result[:hit_type]).to eq(:none)
+      end
+    end
+
+    context "when API returns 401 unauthorized" do
+      let(:error) { Class.new(StandardError).new("401 Unauthorized") }
+
+      before do
+        stub_service_env(mock: false, api_key: "invalid-key")
+        allow(service).to receive(:openai_available?).and_return(true)
+        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_raise(error)
+      end
+
+      it "logs warning and falls back safely" do
+        expect(Rails.logger).to receive(:warn).with(include("AI generation failed"))
+
         expect(result[:result_text]).to eq(query)
+        expect(result[:safety_mode_applied]).to be(true)
+        expect(result[:hit_type]).to eq(:none)
+      end
+    end
+
+    context "when API returns 429 rate limit" do
+      let(:error) { Class.new(StandardError).new("429 Too Many Requests") }
+
+      before do
+        stub_service_env(mock: false, api_key: "test-openai-key")
+        allow(service).to receive(:openai_available?).and_return(true)
+        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_raise(error)
+      end
+
+      it "handles the error and returns fallback result" do
+        expect(Rails.logger).to receive(:warn).with(include("AI generation failed"))
+
+        expect(result[:result_text]).to eq(query)
+        expect(result[:safety_mode_applied]).to be(true)
+        expect(result[:hit_type]).to eq(:none)
+      end
+    end
+
+    context "when API request times out" do
+      let(:error) { Timeout::Error.new("execution expired") }
+
+      before do
+        stub_service_env(mock: false, api_key: "test-openai-key")
+        allow(service).to receive(:openai_available?).and_return(true)
+        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_raise(error)
+      end
+
+      it "handles timeout and returns fallback result" do
+        expect(Rails.logger).to receive(:warn).with(include("AI generation failed"))
+
+        expect(result[:result_text]).to eq(query)
+        expect(result[:safety_mode_applied]).to be(true)
+        expect(result[:hit_type]).to eq(:none)
+      end
+    end
+
+    context "when API responds successfully but content is empty" do
+      let(:api_response) { { "choices" => [{ "message" => { "content" => "" } }] } }
+
+      before do
+        stub_service_env(mock: false, api_key: "test-openai-key")
+        allow(service).to receive(:openai_available?).and_return(true)
+        allow_any_instance_of(OpenAI::Client).to receive(:chat).and_return(api_response)
+      end
+
+      it "falls back to local result safely" do
+        expect(result[:result_text]).to eq(query)
+        expect(result[:safety_mode_applied]).to be(true)
+        expect(result[:hit_type]).to eq(:none)
       end
     end
 
     context "when query is nil" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
       let(:query) { nil }
 
-      it "returns :none as hit_type" do
-        expect(result[:hit_type]).to eq(:none)
+      before do
+        stub_service_env(mock: true, api_key: "dummy")
       end
 
-      it "returns true for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(true)
-      end
-
-      it "returns an empty string as result_text" do
+      it "returns empty fallback text safely" do
         expect(result[:result_text]).to eq("")
+        expect(result[:safety_mode_applied]).to be(true)
+        expect(result[:hit_type]).to eq(:none)
       end
     end
 
-    context "when query is an empty string" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
+    context "when query is empty string" do
       let(:query) { "" }
 
-      it "returns :none as hit_type" do
-        expect(result[:hit_type]).to eq(:none)
+      before do
+        stub_service_env(mock: true, api_key: "dummy")
       end
 
-      it "returns true for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(true)
-      end
-
-      it "returns an empty string as result_text" do
+      it "returns empty fallback text safely" do
         expect(result[:result_text]).to eq("")
+        expect(result[:safety_mode_applied]).to be(true)
+        expect(result[:hit_type]).to eq(:none)
       end
     end
   end
