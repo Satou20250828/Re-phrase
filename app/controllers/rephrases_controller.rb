@@ -394,7 +394,10 @@ class RephrasesController < ApplicationController
   end
 
   def fallback_candidate_text(suffix)
-    "#{rephrase_params[:content].to_s.strip}（提案#{suffix}）".strip.truncate(300, omission: "")
+    base = safe_rephrase_base(rephrase_params[:content].to_s)
+    return nil if base.blank?
+
+    fallback_variant_for(base, suffix).truncate(300, omission: "")
   end
 
   def fallback_rephrase_candidates(text)
@@ -405,11 +408,9 @@ class RephrasesController < ApplicationController
     base = safe_rephrase_base(text)
     return default_template_rephrases if base.blank?
 
-    [
-      "#{base}の件ですが、何卒よろしくお願い申し上げます。",
-      "#{base}につきまして、ご確認をお願いできますでしょうか？",
-      "#{base}の件ですが、よろしくね！"
-    ].map { |item| item.truncate(300, omission: "") }
+    (1..MIN_REPHRASE_CANDIDATES).map do |index|
+      fallback_variant_for(base, index).truncate(300, omission: "")
+    end
   end
 
   # 安全性重視の加工:
@@ -436,10 +437,27 @@ class RephrasesController < ApplicationController
 
   def default_template_rephrases
     [
-      "ご依頼の件ですが、何卒よろしくお願い申し上げます。",
-      "ご依頼につきまして、ご確認をお願いできますでしょうか？",
-      "ご依頼の件ですが、よろしくね！"
+      "ご依頼内容を確認のうえ、対応をお願いいたします。",
+      "恐れ入りますが、ご依頼内容のご確認をお願いいたします。",
+      "お手数ですが、ご依頼内容についてご対応いただけますと幸いです。"
     ]
+  end
+
+  def fallback_variant_for(base, index)
+    sentence = normalize_to_sentence(base)
+    case index
+    when 1
+      "#{sentence}恐れ入りますが、ご確認をお願いいたします。"
+    when 2
+      "#{sentence}お手数ですが、ご対応いただけますと幸いです。"
+    else
+      "#{sentence}差し支えなければ、ご確認のほどよろしくお願いいたします。"
+    end
+  end
+
+  def normalize_to_sentence(text)
+    normalized = text.to_s.strip.gsub(/[。！？!?]+\z/, "")
+    "#{normalized}。"
   end
 
   # rubocop:disable Metrics/MethodLength
