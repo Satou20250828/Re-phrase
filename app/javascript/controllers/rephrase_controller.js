@@ -6,7 +6,11 @@ export default class extends Controller {
   static values = { maxLength: Number }
 
   connect() {
-    this.validateContent()
+    console.log("[rephrase] connect", {
+      hasContentTarget: this.hasContentTarget,
+      hasErrorModalContainerTarget: this.hasErrorModalContainerTarget
+    })
+    this.refreshContentState()
   }
 
   // 原文テキストエリアだけをクリアする
@@ -18,7 +22,7 @@ export default class extends Controller {
     this.contentTarget.focus()
   }
 
-  validateContent() {
+  refreshContentState() {
     if (!this.hasContentTarget) return
 
     const maxLength = this.maxLengthValue || 300
@@ -37,11 +41,25 @@ export default class extends Controller {
       this.contentSectionTarget.classList.toggle("bg-red-50/20", isTooLong)
       this.contentSectionTarget.classList.toggle("dark:bg-red-950/20", isTooLong)
     }
+  }
+
+  validateContent() {
+    if (!this.hasContentTarget) return
+
+    const maxLength = this.maxLengthValue || 300
+    const length = this.contentTarget.value.length
+    const isTooLong = length > maxLength
+
+    this.refreshContentState()
 
     this.renderClientError(isTooLong, length, maxLength)
   }
 
-  preventInvalidSubmit(event) {
+  submit(event) {
+    console.log("[rephrase] submit", {
+      contentLength: this.hasContentTarget ? this.contentTarget.value.length : 0
+    })
+
     const maxLength = this.maxLengthValue || 300
     const length = this.hasContentTarget ? this.contentTarget.value.length : 0
     const isTooLong = length > maxLength
@@ -55,7 +73,7 @@ export default class extends Controller {
   renderClientError(isTooLong, length, maxLength) {
     if (!this.hasErrorModalContainerTarget) return
 
-    const existingAlert = document.getElementById("rephrase-error-modal")
+    const existingAlert = document.getElementById("client-content-limit-modal")
     if (!isTooLong) {
       if (existingAlert) existingAlert.remove()
       return
@@ -63,8 +81,8 @@ export default class extends Controller {
 
     const overflowCount = length - maxLength
     const markup = `
-      <div id="rephrase-error-modal"
-           class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"
+      <div id="client-content-limit-modal"
+           class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
            role="alertdialog"
            aria-modal="true"
            aria-labelledby="rephrase-error-modal-title"
@@ -104,8 +122,10 @@ export default class extends Controller {
   }
 
   closeErrorModal() {
-    const modal = document.getElementById("rephrase-error-modal")
-    if (modal) modal.remove()
+    const clientModal = document.getElementById("client-content-limit-modal")
+    const serverModal = document.getElementById("rephrase-error-modal")
+    if (clientModal) clientModal.remove()
+    if (serverModal) serverModal.remove()
   }
 
   closeErrorModalOnBackdrop(event) {
@@ -128,6 +148,6 @@ export default class extends Controller {
       el.removeAttribute("aria-disabled")
     })
 
-    this.validateContent()
+    this.refreshContentState()
   }
 }
