@@ -24,6 +24,8 @@ class RephrasesController < ApplicationController
   # 言い換え処理を実行し、結果と履歴をTurbo Streamで更新
   def create
     prepare_create_context
+    return render_content_length_error if content_too_long?
+
     process_create_result(safe_convert_result(rephrase_params[:content]))
     return render_validation_errors if @rephrase&.errors&.any?
 
@@ -198,6 +200,18 @@ class RephrasesController < ApplicationController
       format.turbo_stream { render :index, status: :unprocessable_content, formats: [:html] }
       format.html { render :index, status: :unprocessable_content }
     end
+  end
+
+  def content_too_long?
+    rephrase_params[:content].to_s.length > 300
+  end
+
+  def render_content_length_error
+    @field_errors = { content: ["300文字以内で入力してください"] }
+    @error_message = "入力文が300文字を超えています。文字数を減らして再度お試しください。"
+    @search_logs = SearchLog.order(created_at: :desc).limit(10)
+    @rephrased_results = fetch_recent_rephrases
+    render_validation_errors
   end
 
   # Turbo Stream と通常HTMLのレスポンスを切り替え

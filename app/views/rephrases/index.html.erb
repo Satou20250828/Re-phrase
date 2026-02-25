@@ -29,12 +29,12 @@
       "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-800 dark:bg-slate-900"
     end
   %>
-  <div id="form_errors">
-    <%= render "rephrases/form_errors", error_message: @error_message, field_errors: @field_errors %>
+  <div id="error_modal_container" data-rephrase-target="errorModalContainer">
+    <%= render "rephrases/error_modal", error_message: @error_message, field_errors: @field_errors, rephrase: @rephrase %>
   </div>
 
-  <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { controller: "rephrase", action: "turbo:submit-end->rephrase#restoreFormState" } do |form| %>
-    <section class="<%= content_section_classes %>">
+  <%= form_with url: rephrases_path, method: :post, scope: :rephrase, class: "space-y-6", data: { controller: "rephrase", action: "input->rephrase#validateContent submit->rephrase#preventInvalidSubmit turbo:submit-end->rephrase#restoreFormState", rephrase_max_length_value: 300 } do |form| %>
+    <section class="<%= content_section_classes %>" data-rephrase-target="contentSection">
       <div class="flex justify-end border-b border-slate-100 bg-slate-50/50 p-1 dark:border-slate-800 dark:bg-slate-800/60">
         <button type="button" class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400" data-action="rephrase#clearContent">
           内容をクリア
@@ -43,12 +43,14 @@
 
       <%= form.text_area :content,
                          rows: 6,
-                         maxlength: 300,
                          class: "min-h-[160px] w-full resize-none border-none bg-transparent p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500",
                          placeholder: "ここに言い換えたい文章を入力してください...",
                          aria: { invalid: has_content_error, describedby: "rephrase-form-alert rephrase-input-note" },
                          data: { rephrase_target: "content" } %>
-      <p id="rephrase-input-note" class="mt-1 text-sm text-gray-500 dark:text-slate-400">※個人情報（氏名・住所など）は入力しないでください</p>
+      <div class="mt-1 flex items-center justify-between px-1">
+        <p id="rephrase-input-note" class="text-sm text-gray-500 dark:text-slate-400">※個人情報（氏名・住所など）は入力しないでください</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400" data-rephrase-target="contentCount" aria-live="polite">0/300文字</p>
+      </div>
     </section>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
