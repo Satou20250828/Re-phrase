@@ -29,7 +29,7 @@
         <span class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Re:フレーズ</span>
       </div>
       <div class="flex items-center gap-3">
-        <button type="button" class="rounded-full p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800" onclick="document.documentElement.classList.toggle('dark')">
+        <button type="button" class="rounded-full p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800" data-theme-toggle>
           <span class="material-symbols-outlined text-slate-500 dark:text-slate-400">dark_mode</span>
         </button>
         <%= link_to "メイン画面へ", rephrases_path, class: "rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700" %>
@@ -132,7 +132,7 @@
           <span class="block">コミュニケーションをスムーズにする</span>
         </h2>
         <p class="mb-10 text-lg text-blue-100 opacity-90">今すぐRe:フレーズを始めて、コミュニケーションのストレスを解消しましょう</p>
-        <%= link_to "無料で利用を開始する", rephrases_path, class: "rounded-full bg-white px-10 py-4 text-lg font-bold text-[var(--primary)] shadow-xl transition-all hover:bg-slate-100" %>
+        <%= link_to "無料で利用を開始する", rephrases_path, class: "rounded-full bg-white px-10 py-4 text-lg font-bold text-[var(--primary)] shadow-xl transition-all hover:bg-slate-100 dark:bg-slate-100 dark:hover:bg-slate-200" %>
       </div>
     </section>
   </main>
@@ -147,10 +147,10 @@
           <span class="font-bold text-slate-900 dark:text-white">Re:フレーズ</span>
         </div>
         <div class="flex justify-center gap-8 text-sm text-slate-500 dark:text-slate-400">
-          <a href="#" class="transition-colors hover:text-[var(--primary)]">利用規約</a>
-          <a href="#" class="transition-colors hover:text-[var(--primary)]">プライバシーポリシー</a>
+          <%= link_to "利用規約", terms_path, class: "transition-colors hover:text-[var(--primary)]" %>
+          <%= link_to "プライバシーポリシー", privacy_path, class: "transition-colors hover:text-[var(--primary)]" %>
         </div>
-        <div class="text-center text-xs text-slate-400 dark:text-slate-600 md:text-right">© 2026 Re:フレーズ. All rights reserved.</div>
+        <div class="text-center text-xs text-slate-400 dark:text-slate-600 md:text-right">© 2026 Re:フレーズ</div>
       </div>
     </div>
   </footer>

@@ -14,7 +14,7 @@
 } %>
 
 <% if has_error_message || has_field_errors %>
-  <section class="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+  <section class="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
     <p class="font-semibold">保存に失敗しました</p>
     <% if has_error_message %>
       <p class="mt-1"><%= error_message %></p>
