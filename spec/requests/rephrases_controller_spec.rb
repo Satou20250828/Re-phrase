@@ -59,4 +59,46 @@ RSpec.describe "RephrasesController", type: :request do
       end
     end
   end
+
+  describe "POST /rephrases" do
+    subject(:perform_request) { post rephrases_path, params: params }
+
+    let(:params) do
+      {
+        rephrase: {
+          content: "確認お願いします",
+          scene: "",
+          target: "",
+          context: ""
+        }
+      }
+    end
+
+    before do
+      allow(PhraseConverterService).to receive(:call).and_return(
+        {
+          result_text: "ご確認ください",
+          safety_mode_applied: false,
+          hit_type: :none
+        }
+      )
+    end
+
+    it "creates at least three rephrase/search log candidates" do
+      expect { perform_request }
+        .to change(Rephrase, :count).by(3)
+        .and change(SearchLog, :count).by(3)
+
+      created_candidates = SearchLog.order(created_at: :desc).limit(3).pluck(:converted_text)
+      expect(created_candidates.size).to eq(3)
+      expect(created_candidates.uniq.size).to eq(3)
+    end
+
+    it "redirects to rephrases index" do
+      perform_request
+
+      expect(response).to have_http_status(:found)
+      expect(response).to redirect_to(rephrases_path)
+    end
+  end
 end

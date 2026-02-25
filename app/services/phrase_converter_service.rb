@@ -84,7 +84,13 @@ class PhraseConverterService
   end
 
   def openai_available?
+    return false if mock_conversion_enabled?
+
     defined?(OpenAI::Client) && ENV["OPENAI_API_KEY"].present?
+  end
+
+  def mock_conversion_enabled?
+    ActiveModel::Type::Boolean.new.cast(ENV.fetch("REPHRASE_USE_MOCK", true))
   end
 
   def random_temperature

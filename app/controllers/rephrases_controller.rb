@@ -176,7 +176,9 @@ class RephrasesController < ApplicationController
                          result_preview: result[:result_text].to_s.truncate(80)
                        })
     @db_warning_message = "データベース接続に失敗したため、結果は一時表示のみです。"
-    @rephrased_results = [Rephrase.new(content: result[:result_text].to_s)]
+    @rephrased_results = split_rephrase_candidates(result[:result_text].to_s).map do |candidate|
+      Rephrase.new(content: candidate)
+    end
   end
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
@@ -283,7 +285,7 @@ class RephrasesController < ApplicationController
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
   def use_mock_conversion?
-    ActiveModel::Type::Boolean.new.cast(ENV.fetch("REPHRASE_USE_MOCK", false))
+    ActiveModel::Type::Boolean.new.cast(ENV.fetch("REPHRASE_USE_MOCK", true))
   end
 
   def mock_convert_result(content)
@@ -312,7 +314,32 @@ class RephrasesController < ApplicationController
     end
 
     candidates = [text.to_s.strip] if candidates.blank?
+    candidates = candidates.uniq.first(3)
+
+    if candidates.size < 3
+      seed_text = candidates.first.presence || rephrase_params[:content].to_s.strip
+      candidates.concat(fallback_rephrase_candidates(seed_text).reject { |candidate| candidates.include?(candidate) })
+    end
+
+    while candidates.size < 3
+      suffix = candidates.size + 1
+      fallback_text = "#{rephrase_params[:content].to_s.strip}（提案#{suffix}）".strip.truncate(300, omission: "")
+      candidates << fallback_text unless fallback_text.blank? || candidates.include?(fallback_text)
+      break if fallback_text.blank?
+    end
+
     candidates.first(3)
+  end
+
+  def fallback_rephrase_candidates(text)
+    base_text = text.to_s.strip
+    return [] if base_text.blank?
+
+    [
+      base_text,
+      "#{base_text}。よろしくお願いいたします。",
+      "#{base_text}。お手数ですがご確認ください。"
+    ].map { |item| item.gsub(/。{2,}/, "。").truncate(300, omission: "") }.uniq
   end
 
   # rubocop:disable Metrics/MethodLength
