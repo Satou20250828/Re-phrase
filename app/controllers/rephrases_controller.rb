@@ -201,15 +201,17 @@ class RephrasesController < ApplicationController
     @search_logs = SearchLog.order(created_at: :desc).limit(10)
 
     respond_to do |format|
-      format.turbo_stream do
-        render turbo_stream: turbo_stream.update(
-          "error_modal_container",
-          partial: "rephrases/error_modal",
-          locals: { error_message: @error_message, field_errors: @field_errors, rephrase: @rephrase }
-        ), status: :ok
-      end
+      format.turbo_stream { render_validation_errors_turbo_stream }
       format.html { render :index, status: :unprocessable_content }
     end
+  end
+
+  def render_validation_errors_turbo_stream
+    render turbo_stream: turbo_stream.update(
+      "error_modal_container",
+      partial: "rephrases/error_modal",
+      locals: { error_message: @error_message, field_errors: @field_errors, rephrase: @rephrase }
+    ), status: :ok
   end
 
   def content_too_long?
