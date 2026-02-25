@@ -38,20 +38,5 @@
     </main>
 
     <%= render "layouts/footer" %>
-    <script>
-      (() => {
-        const syncTheme = () => {
-          document.querySelectorAll("[data-theme-toggle]").forEach((el) => {
-            el.addEventListener("click", () => {
-              const enabled = document.documentElement.classList.toggle("dark");
-              localStorage.setItem("theme", enabled ? "dark" : "light");
-            });
-          });
-        };
-
-        document.addEventListener("turbo:load", syncTheme);
-        document.addEventListener("DOMContentLoaded", syncTheme);
-      })();
-    </script>
   </body>
 </html>
