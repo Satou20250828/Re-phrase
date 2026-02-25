@@ -2,13 +2,6 @@
 # rubocop:disable Metrics/ClassLength
 class RephrasesController < ApplicationController
   DEFAULT_CATEGORY_NAME = "default".freeze
-  MOCK_RESULT_TEXT = "【モック】お手伝いできます。状況をもう少し詳しく教えてください。".freeze
-  MOCK_VARIATIONS = [
-    "【モックA】ご連絡ありがとうございます。\n現状を確認し、対応方針を本日中に共有いたします。進捗は30分ごとに更新します。",
-    "【モックB】恐れ入りますが、次の3点をご共有ください: 1) 発生時刻 2) 再現手順 3) 期待結果。#debug #rails",
-    "【モックC】承知しました。\"至急対応\"として扱います。特殊文字テスト: !@#$%^&*()[]{}<>/\\|~`",
-    "【モックD】結論: まず暫定回避を適用し、恒久対策は別PRで実施します。改行テスト\n- 影響範囲: 限定的\n- 優先度: 高"
-  ].freeze
 
   # 直近の検索履歴を表示する初期画面
   def index
@@ -290,8 +283,8 @@ class RephrasesController < ApplicationController
 
   def mock_convert_result(content)
     text = content.to_s.strip
-    base = MOCK_VARIATIONS.sample || MOCK_RESULT_TEXT
-    rendered = text.present? ? "#{base}\n\n[入力原文] #{text}" : base
+    candidates = build_template_rephrases(text)
+    rendered = candidates.each_with_index.map { |candidate, index| "#{index + 1}. #{candidate}" }.join("\n")
 
     {
       result_text: rendered,
@@ -332,14 +325,39 @@ class RephrasesController < ApplicationController
   end
 
   def fallback_rephrase_candidates(text)
-    base_text = text.to_s.strip
-    return [] if base_text.blank?
+    build_template_rephrases(text)
+  end
+
+  def build_template_rephrases(text)
+    base = safe_rephrase_base(text)
+    return default_template_rephrases if base.blank?
 
     [
-      base_text,
-      "#{base_text}。よろしくお願いいたします。",
-      "#{base_text}。お手数ですがご確認ください。"
-    ].map { |item| item.gsub(/。{2,}/, "。").truncate(300, omission: "") }.uniq
+      "#{base}の件ですが、何卒よろしくお願い申し上げます。",
+      "#{base}につきまして、ご確認をお願いできますでしょうか？",
+      "#{base}の件ですが、よろしくね！"
+    ].map { |item| item.truncate(300, omission: "") }
+  end
+
+  # 安全性重視の加工:
+  # - 未知パターンは触らず、限定語尾のみ取り除く
+  # - 空/短文はフォールバックへ
+  def safe_rephrase_base(text)
+    sanitized = text.to_s.strip.gsub(/\s+/, " ")
+    return nil if sanitized.blank? || sanitized.length < 2
+
+    sanitized = sanitized.sub(/(?:やって|して|だよ|だ)\z/, "").strip
+    return nil if sanitized.blank? || sanitized.length < 2
+
+    sanitized.gsub(/[、。]+\z/, "").strip
+  end
+
+  def default_template_rephrases
+    [
+      "ご依頼の件ですが、何卒よろしくお願い申し上げます。",
+      "ご依頼につきまして、ご確認をお願いできますでしょうか？",
+      "ご依頼の件ですが、よろしくね！"
+    ]
   end
 
   # rubocop:disable Metrics/MethodLength

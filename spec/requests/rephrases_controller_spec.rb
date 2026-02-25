@@ -100,5 +100,53 @@ RSpec.describe "RephrasesController", type: :request do
       expect(response).to have_http_status(:found)
       expect(response).to redirect_to(rephrases_path)
     end
+
+    context "when mock conversion is enabled" do
+      let(:params) do
+        {
+          rephrase: {
+            content: "これやって",
+            scene: "",
+            target: "",
+            context: ""
+          }
+        }
+      end
+
+      before do
+        allow(PhraseConverterService).to receive(:call).and_raise("should not be called")
+      end
+
+      it "applies regex-based cleanup and creates three templated candidates" do
+        perform_request
+
+        created_candidates = SearchLog.where(query: "これやって").order(created_at: :desc).limit(3).pluck(:converted_text)
+        expect(created_candidates).to include("これの件ですが、何卒よろしくお願い申し上げます。")
+        expect(created_candidates).to include("これにつきまして、ご確認をお願いできますでしょうか？")
+        expect(created_candidates).to include("これの件ですが、よろしくね！")
+      end
+
+      context "when input is too short" do
+        let(:params) do
+          {
+            rephrase: {
+              content: "あ",
+              scene: "",
+              target: "",
+              context: ""
+            }
+          }
+        end
+
+        it "uses fallback templates" do
+          perform_request
+
+          created_candidates = SearchLog.where(query: "あ").order(created_at: :desc).limit(3).pluck(:converted_text)
+          expect(created_candidates).to include("ご依頼の件ですが、何卒よろしくお願い申し上げます。")
+          expect(created_candidates).to include("ご依頼につきまして、ご確認をお願いできますでしょうか？")
+          expect(created_candidates).to include("ご依頼の件ですが、よろしくね！")
+        end
+      end
+    end
   end
 end
