@@ -39,7 +39,10 @@ class RephrasesController < ApplicationController
     search_log = SearchLog.find_by(id: params[:id])
     return head :not_found unless search_log
 
+    history_dom_id = ActionView::RecordIdentifier.dom_id(search_log)
     search_log.destroy!
+    return render_destroy_history_turbo_stream(history_dom_id) if request.format.turbo_stream?
+
     head :no_content
   rescue StandardError => e
     Rails.logger.error("[rephrase#destroy_history] エラー: #{e.class} - #{e.message}")
@@ -75,6 +78,10 @@ class RephrasesController < ApplicationController
     )
   rescue StandardError => e
     Rails.logger.warn("[rephrase#search] SearchLog保存失敗: #{e.class} - #{e.message}")
+  end
+
+  def render_destroy_history_turbo_stream(dom_id)
+    render turbo_stream: turbo_stream.remove(dom_id), status: :ok
   end
 
   def search_result(query)

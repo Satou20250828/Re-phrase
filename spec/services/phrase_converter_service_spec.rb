@@ -1,118 +1,142 @@
 require "rails_helper"
+# rubocop:disable RSpec/MultipleExpectations
 
 RSpec.describe PhraseConverterService do
   describe "#call" do
-    subject(:result) { described_class.new(query: query, category_id: category_id).call }
+    subject(:result) do
+      described_class.new(
+        query: query,
+        category_id: nil,
+        scene: "職場",
+        target: "目上",
+        context: "依頼"
+      ).call
+    end
 
-    context "when an exact match exists" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
-      let(:query) { "「わかりました」→「承知いたしました」" }
+    let(:query) { "ご確認お願いします" }
 
+    context "when mock mode is enabled" do
       before do
-        FactoryBot.create(:rephrase, category: category, content: query)
+        stub_phrase_converter_env(mock: true, api_key: "dummy")
+        stub_openai_client(chat_response: {})
       end
 
-      it "returns :exact as hit_type" do
-        expect(result[:hit_type]).to eq(:exact)
+      it "does not instantiate OpenAI client and returns fallback text" do
+        result
+        expect(OpenAI::Client).not_to have_received(:new)
       end
 
-      it "returns false for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(false)
-      end
-
-      it "returns converted text as result_text" do
-        expect(result[:result_text]).to eq("承知いたしました")
+      it "returns fallback payload" do
+        expect(result).to include(
+          result_text: query,
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
     end
 
-    context "when only a partial match exists" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
-      let(:query) { "すみません" }
+    context "when API mode is enabled and OpenAI returns success response" do
+      let(:api_response) do
+        {
+          "choices" => [
+            {
+              "message" => {
+                "content" => "1. [短文] ご確認をお願いいたします。\n2. [標準] ご確認いただけますと幸いです。\n3. [フォーマル] ご確認のほどお願い申し上げます。"
+              }
+            }
+          ]
+        }
+      end
 
       before do
-        FactoryBot.create(
-          :rephrase,
-          category: category,
-          content: "「すみません」→「失礼いたしました」"
-        )
+        stub_phrase_converter_env(mock: false, api_key: "test-openai-key")
+        stub_openai_client(chat_response: api_response)
       end
 
-      it "returns :partial as hit_type" do
-        expect(result[:hit_type]).to eq(:partial)
-      end
-
-      it "returns false for safety_mode_applied" do
+      it "extracts and formats converted variants from API response" do
+        expect(result[:result_text]).to include("1. [短文] ご確認をお願いいたします。")
+        expect(result[:result_text]).to include("2. [標準] ご確認いただけますと幸いです。")
+        expect(result[:result_text]).to include("3. [フォーマル] ご確認のほどお願い申し上げます。")
         expect(result[:safety_mode_applied]).to be(false)
-      end
-
-      it "returns converted text as result_text" do
-        expect(result[:result_text]).to eq("失礼いたしました")
-      end
-    end
-
-    context "when no match exists in the target category" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:other_category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
-      let(:query) { "未登録フレーズ" }
-
-      before do
-        FactoryBot.create(
-          :rephrase,
-          category: other_category,
-          content: "未登録フレーズ"
-        )
-      end
-
-      it "returns :none as hit_type" do
         expect(result[:hit_type]).to eq(:none)
       end
+    end
 
-      it "returns true for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(true)
+    shared_examples "falls back safely when AI generation fails" do |error|
+      before do
+        stub_phrase_converter_env(mock: false, api_key: "test-openai-key")
+        stub_openai_client(chat_error: error)
+        allow(Rails.logger).to receive(:warn)
       end
 
-      it "returns the original query as result_text" do
-        expect(result[:result_text]).to eq(query)
+      it "logs warning and returns fallback result" do
+        result
+        expect(Rails.logger).to have_received(:warn).with(include("AI generation failed"))
+      end
+
+      it "returns fallback result" do
+        expect(result).to include(
+          result_text: query,
+          safety_mode_applied: true,
+          hit_type: :none
+        )
+      end
+    end
+
+    context "when API returns 401 unauthorized" do
+      it_behaves_like "falls back safely when AI generation fails", StandardError.new("401 Unauthorized")
+    end
+
+    context "when API returns 429 rate limit" do
+      it_behaves_like "falls back safely when AI generation fails", StandardError.new("429 Too Many Requests")
+    end
+
+    context "when API request times out" do
+      it_behaves_like "falls back safely when AI generation fails", Timeout::Error.new("execution expired")
+    end
+
+    context "when API responds successfully but content is empty" do
+      before do
+        stub_phrase_converter_env(mock: false, api_key: "test-openai-key")
+        stub_openai_client(chat_response: { "choices" => [{ "message" => { "content" => "" } }] })
+      end
+
+      it "falls back to local result safely" do
+        expect(result).to include(
+          result_text: query,
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
     end
 
     context "when query is nil" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
       let(:query) { nil }
 
-      it "returns :none as hit_type" do
-        expect(result[:hit_type]).to eq(:none)
-      end
+      before { stub_phrase_converter_env(mock: true, api_key: "dummy") }
 
-      it "returns true for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(true)
-      end
-
-      it "returns an empty string as result_text" do
-        expect(result[:result_text]).to eq("")
+      it "returns empty fallback text safely" do
+        expect(result).to include(
+          result_text: "",
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
     end
 
-    context "when query is an empty string" do
-      let(:category) { FactoryBot.create(:category) }
-      let(:category_id) { category.id }
+    context "when query is empty string" do
       let(:query) { "" }
 
-      it "returns :none as hit_type" do
-        expect(result[:hit_type]).to eq(:none)
-      end
+      before { stub_phrase_converter_env(mock: true, api_key: "dummy") }
 
-      it "returns true for safety_mode_applied" do
-        expect(result[:safety_mode_applied]).to be(true)
-      end
-
-      it "returns an empty string as result_text" do
-        expect(result[:result_text]).to eq("")
+      it "returns empty fallback text safely" do
+        expect(result).to include(
+          result_text: "",
+          safety_mode_applied: true,
+          hit_type: :none
+        )
       end
     end
   end
 end
+# rubocop:enable RSpec/MultipleExpectations

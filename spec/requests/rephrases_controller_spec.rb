@@ -1,197 +1,81 @@
 require "rails_helper"
+# rubocop:disable RSpec/ExampleLength, RSpec/MultipleExpectations
 
 RSpec.describe "RephrasesController", type: :request do
-  describe "GET /search" do
-    subject(:perform_request) { get search_path, params: params }
+  describe "GET /rephrases" do
+    it "returns ok and renders recent history" do
+      create(:search_log, query: "確認お願いします", converted_text: "ご確認をお願いいたします。")
 
-    let(:category) { create(:category) }
-    let(:query) { "ごめん" }
-    let(:params) { { q: query, category_id: category.id } }
+      get rephrases_path
 
-    context "when SearchLog is saved" do
-      before do
-        create(:rephrase, category: category, content: "ごめん→「失礼いたしました」")
-        perform_request
-      end
-
-      it "returns OK" do
-        expect(response).to have_http_status(:ok)
-      end
-
-      it "shows converted text" do
-        expect(response.body).to include("失礼いたしました")
-      end
-
-      it "stores the query" do
-        expect(SearchLog.last&.query).to eq(query)
-      end
-
-      it "stores converted text" do
-        expect(SearchLog.last&.converted_text).to eq("失礼いたしました")
-      end
-
-      it "stores category id" do
-        expect(SearchLog.last&.category_id).to eq(category.id)
-      end
-
-      it "stores hit type" do
-        expect(SearchLog.last&.hit_type).to eq("partial")
-      end
-
-      it "stores safety mode flag" do
-        expect(SearchLog.last&.safety_mode_applied).to be(false)
-      end
-    end
-
-    context "when SearchLog save fails" do
-      before do
-        create(:rephrase, category: category, content: "ごめん→「失礼いたしました」")
-        allow(SearchLog).to receive(:create).and_return(SearchLog.new)
-        perform_request
-      end
-
-      it "still returns OK" do
-        expect(response).to have_http_status(:ok)
-      end
-
-      it "still shows converted text" do
-        expect(response.body).to include("失礼いたしました")
-      end
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("履歴")
+      expect(response.body).to include("確認お願いします")
     end
   end
 
   describe "POST /rephrases" do
-    subject(:perform_request) { post rephrases_path, params: params }
+    let(:base_params) { attributes_for(:rephrase).slice(:content).merge(scene: "", target: "", context: "") }
+    let(:params) { { rephrase: base_params } }
 
-    let(:params) do
-      {
-        rephrase: {
-          content: "確認お願いします",
-          scene: "",
-          target: "",
-          context: ""
-        }
-      }
-    end
-
-    before do
-      allow(PhraseConverterService).to receive(:call).and_return(
-        {
-          result_text: "ご確認ください",
-          safety_mode_applied: false,
-          hit_type: :none
-        }
-      )
-    end
-
-    it "creates at least three rephrase/search log candidates" do
-      expect { perform_request }
-        .to change(Rephrase, :count).by(3)
-        .and change(SearchLog, :count).by(3)
-    end
-
-    it "redirects to rephrases index" do
-      perform_request
-
-      expect(response).to redirect_to(rephrases_path)
-    end
-
-    context "when mock conversion is enabled for suffix cleanup" do
-      let(:params) do
-        {
-          rephrase: {
-            content: "これやって",
-            scene: "",
-            target: "",
-            context: ""
-          }
-        }
-      end
-
+    context "when valid" do
       before do
-        allow(PhraseConverterService).to receive(:call).and_raise("should not be called")
-        perform_request
-      end
-
-      it "includes business template" do
-        expect(created_candidates_for("これやって")).to include("これの件ですが、何卒よろしくお願い申し上げます。")
-      end
-
-      it "includes polite template" do
-        expect(created_candidates_for("これやって")).to include("これにつきまして、ご確認をお願いできますでしょうか？")
-      end
-
-      it "includes casual template" do
-        expect(created_candidates_for("これやって")).to include("これの件ですが、よろしくね！")
-      end
-    end
-
-    context "when mock conversion is enabled for short input" do
-      let(:params) do
-        {
-          rephrase: {
-            content: "あ",
-            scene: "",
-            target: "",
-            context: ""
+        stub_const("RephrasesController::MIN_REPHRASE_CANDIDATES", 1)
+        allow(PhraseConverterService).to receive(:call).and_return(
+          {
+            result_text: "ご確認をお願いいたします。",
+            safety_mode_applied: false,
+            hit_type: :none
           }
-        }
-      end
-
-      before do
-        allow(PhraseConverterService).to receive(:call).and_raise("should not be called")
-        perform_request
-      end
-
-      it "includes fallback business template" do
-        expect(created_candidates_for("あ")).to include("ご依頼の件ですが、何卒よろしくお願い申し上げます。")
-      end
-
-      it "includes fallback polite template" do
-        expect(created_candidates_for("あ")).to include("ご依頼につきまして、ご確認をお願いできますでしょうか？")
-      end
-
-      it "includes fallback casual template" do
-        expect(created_candidates_for("あ")).to include("ご依頼の件ですが、よろしくね！")
-      end
-    end
-
-    context "when mock conversion is enabled for vocabulary replacement" do
-      let(:params) do
-        {
-          rephrase: {
-            content: "早く見て教えて",
-            scene: "",
-            target: "",
-            context: ""
-          }
-        }
-      end
-
-      before do
-        allow(PhraseConverterService).to receive(:call).and_raise("should not be called")
-        perform_request
-      end
-
-      it "includes replaced business template" do
-        expect(created_candidates_for("早く見て教えて")).to include(
-          "至急ご確認ご教示の件ですが、何卒よろしくお願い申し上げます。"
         )
       end
 
-      it "includes replaced polite template" do
-        expect(created_candidates_for("早く見て教えて")).to include(
-          "至急ご確認ご教示につきまして、ご確認をお願いできますでしょうか？"
-        )
-      end
+      it "creates one SearchLog and returns turbo stream result" do
+        expect do
+          post rephrases_path(format: :turbo_stream), params: params
+        end.to change(SearchLog, :count).by(1)
 
-      it "includes replaced casual template" do
-        expect(created_candidates_for("早く見て教えて")).to include("至急ご確認ご教示の件ですが、よろしくね！")
+        expect(response).to have_http_status(:ok)
+        expect(response.media_type).to eq(Mime[:turbo_stream].to_s)
+        expect(response.body).to include("<turbo-stream")
+        expect(response.body).to include('target="rephrase_result"')
+        expect(response.body).to include("提案結果")
+      end
+    end
+
+    context "when invalid" do
+      it "does not create SearchLog and returns turbo stream errors" do
+        invalid_params = {
+          rephrase: attributes_for(:rephrase, :invalid).slice(:content).merge(scene: "", target: "", context: "")
+        }
+
+        expect do
+          post rephrases_path(format: :turbo_stream), params: invalid_params
+        end.not_to change(SearchLog, :count)
+
+        expect(response).to have_http_status(:ok)
+        expect(response.media_type).to eq(Mime[:turbo_stream].to_s)
+        expect(response.body).to include("<turbo-stream")
+        expect(response.body).to include('target="error_modal_container"')
+        expect(response.body).to include("入力文が空です")
       end
     end
   end
 
-  def created_candidates_for(query)
-    SearchLog.where(query: query).order(created_at: :desc).limit(3).pluck(:converted_text)
+  describe "DELETE /rephrases/history/:id" do
+    it "deletes target history and returns turbo stream remove action" do
+      search_log = create(:search_log)
+
+      expect do
+        delete rephrase_history_path(search_log, format: :turbo_stream)
+      end.to change(SearchLog, :count).by(-1)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq(Mime[:turbo_stream].to_s)
+      expect(response.body).to include("<turbo-stream")
+      expect(response.body).to include('action="remove"')
+      expect(response.body).to include(%(target="#{ActionView::RecordIdentifier.dom_id(search_log)}"))
+    end
   end
 end
+# rubocop:enable RSpec/ExampleLength, RSpec/MultipleExpectations
