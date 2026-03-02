@@ -1,4 +1,14 @@
 Rails.application.routes.draw do
+  root "pages#home"
+  get "terms", to: "pages#terms", as: :terms
+  get "privacy", to: "pages#privacy", as: :privacy
+
+  # 言い換え機能の最小構成（一覧表示 + 作成）
+  resources :rephrases, only: %i[index create]
+  get "search", to: "rephrases#search", as: :search
+  delete "rephrases/history/:id", to: "rephrases#destroy_history", as: :rephrase_history
+  delete "rephrases/history", to: "rephrases#clear_history", as: :clear_rephrase_history
+
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
@@ -8,7 +18,4 @@ Rails.application.routes.draw do
   # Render dynamic PWA files from app/views/pwa/*
   get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
   get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
-
-  # Defines the root path route ("/")
-  # root "posts#index"
 end

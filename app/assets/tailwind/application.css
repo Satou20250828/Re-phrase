@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #2563eb;
+  --font-sans: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+  --color-error: #dc2626;
+}
+
+:root.dark {
+  color-scheme: dark;
+}

@@ -1,0 +1,17 @@
+<%= turbo_stream.replace "rephrase_result" do %>
+  <%= turbo_frame_tag "rephrase_result", data: { rephrase_target: "resultFrame" } do %>
+    <%= render partial: "rephrases/rephrase_result", locals: { rephrased_results: @rephrased_results } %>
+  <% end %>
+<% end %>
+
+<%= turbo_stream.update "error_modal_container" do %>
+  <%= render "rephrases/error_modal", error_message: @error_message, field_errors: @field_errors, rephrase: @rephrase %>
+<% end %>
+
+<% if @search_logs.present? %>
+  <% @search_logs.reverse_each do |search_log| %>
+    <%= turbo_stream.prepend "history_list" do %>
+      <%= render "rephrases/history_item", search_log: search_log %>
+    <% end %>
+  <% end %>
+<% end %>

@@ -1,0 +1,22 @@
+<h1>言い換え検索</h1>
+
+<%= form_with url: search_path, method: :get, local: true do |form| %>
+  <div>
+    <%= form.label :q, "検索文" %>
+    <%= form.text_field :q, value: params[:q] %>
+  </div>
+  <div>
+    <%= form.label :category_id, "カテゴリID" %>
+    <%= form.number_field :category_id, value: params[:category_id] %>
+  </div>
+  <%= form.submit "言い換える" %>
+<% end %>
+
+<% if @result_text.present? %>
+  <section id="search-result">
+    <p id="result-text"><%= @result_text %></p>
+    <% if @safety_mode_applied %>
+      <p id="safety-mode-badge">セーフティモードが適用されました</p>
+    <% end %>
+  </section>
+<% end %>

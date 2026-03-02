@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja" class="scroll-smooth">
   <head>
-    <title><%= content_for(:title) || "Re Phrase" %></title>
+    <title><%= content_for(:title) || "Re:フレーズ" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
 
@@ -15,12 +18,24 @@
     <link rel="apple-touch-icon" href="/icon.png">
     <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
     <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+    <script>
+      (() => {
+        const stored = localStorage.getItem("theme");
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const shouldUseDark = stored ? stored === "dark" : prefersDark;
+        document.documentElement.classList.toggle("dark", shouldUseDark);
+      })();
+    </script>
     <%= javascript_importmap_tags %>
   </head>
 
-  <body>
-    <main class="container mx-auto mt-28 px-5 flex">
+  <body class="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-900 dark:text-slate-100">
+    <%= render "layouts/header" %>
+
+    <main class="<%= content_for?(:main_class) ? yield(:main_class) : 'mx-auto w-full max-w-4xl px-4 pb-10 pt-0' %>">
       <%= yield %>
     </main>
+
+    <%= render "layouts/footer" %>
   </body>
 </html>

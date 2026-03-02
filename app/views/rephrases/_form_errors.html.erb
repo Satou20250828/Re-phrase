@@ -1,0 +1,76 @@
+<%
+  merged_field_errors = Hash.new { |h, k| h[k] = [] }
+  field_errors.to_h.each do |attribute, messages|
+    merged_field_errors[attribute.to_sym].concat(Array(messages).map(&:to_s))
+  end
+
+  if defined?(@rephrase) && @rephrase&.errors&.any?
+    @rephrase.errors.each do |error|
+      merged_field_errors[error.attribute.to_sym] << error.message.to_s
+    end
+  end
+
+  merged_field_errors.each { |attribute, messages| merged_field_errors[attribute] = messages.uniq }
+  has_error_message = error_message.present?
+  has_field_errors = merged_field_errors.values.any?(&:present?)
+  field_labels = {
+    content: "入力文",
+    scene: "シーン",
+    target: "相手の関係性",
+    context: "状況",
+    category: "カテゴリ",
+    category_id: "カテゴリ",
+    query: "検索文",
+    converted_text: "言い換え結果",
+    hit_type: "判定種別",
+    rephrase: "言い換え"
+  }
+%>
+
+<% if has_error_message || has_field_errors %>
+  <section id="rephrase-form-alert"
+           role="alert"
+           aria-live="assertive"
+           aria-atomic="true"
+           class="rounded-2xl border border-[var(--color-error)]/40 bg-red-50 p-5 text-sm text-red-900 shadow-sm dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-100">
+    <div class="flex items-start gap-3">
+      <span class="material-symbols-outlined mt-0.5 text-xl text-[var(--color-error)] dark:text-red-300">error</span>
+      <div class="space-y-2">
+        <p class="text-base font-bold">入力内容に修正が必要です</p>
+        <p class="text-sm text-red-800 dark:text-red-200">
+          原因を確認して修正後に、もう一度「言い換え実行」を押してください。
+        </p>
+
+        <% if has_error_message %>
+          <p class="rounded-lg bg-white/60 px-3 py-2 text-sm dark:bg-slate-900/30"><%= error_message %></p>
+        <% end %>
+
+        <% if has_field_errors %>
+          <ul class="space-y-2 pt-1">
+            <% merged_field_errors.each do |attribute, messages| %>
+              <% next if messages.blank? %>
+              <% label = field_labels[attribute.to_sym] || attribute.to_s.humanize %>
+              <% messages.each do |message| %>
+                <% guidance =
+                  if attribute.to_sym == :content && message.include?("300")
+                    "入力文が長すぎます。300文字以内に短くしてください。"
+                  elsif message.include?("入力してください") || message.include?("blank")
+                    "#{label}が未入力です。内容を入力して再度送信してください。"
+                  elsif message.include?("invalid")
+                    "#{label}の形式が正しくありません。入力内容を見直して再入力してください。"
+                  else
+                    "#{label}に問題があります。#{message}。内容を確認して修正してください。"
+                  end
+                %>
+                <li class="rounded-lg bg-white/70 px-3 py-2 text-sm leading-relaxed dark:bg-slate-900/40">
+                  <span class="font-semibold">原因:</span> <%= "#{label}: #{message}" %><br>
+                  <span class="font-semibold">対処:</span> <%= guidance %>
+                </li>
+              <% end %>
+            <% end %>
+          </ul>
+        <% end %>
+      </div>
+    </div>
+  </section>
+<% end %>
